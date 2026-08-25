@@ -2,7 +2,7 @@
 
 Target: `README.md`
 
-Target SHA-256: `cf068872d989fa88c9a5b9673869e5dec8375e8b9bdf68f998fc7a0376e8bdb0`
+Target SHA-256: `7bf91f6f18e86055564fed5fe096f1592b89add8a324b817e9cd4050748ca949`
 
 Command:
 
@@ -131,3 +131,44 @@ Manual passes rechecked against the changed line only, since nothing else moved:
 
 **Cleared:** no active editorial-slop finding in the current README. This refresh
 reconciles the hash only; it does not reopen or supersede any prior disposition.
+
+## Refresh — 2026-08-25 (audit scaffold options documented)
+
+Prior target hash `cf068872d989fa88c9a5b9673869e5dec8375e8b9bdf68f998fc7a0376e8bdb0`; current `7bf91f6f18e86055564fed5fe096f1592b89add8a324b817e9cd4050748ca949`.
+
+The README change is one paragraph in **Start a new report bundle from green**.
+It names the new mode, authority, supplied-screenshot, image-format, and item-ID
+prefix inputs beside the scaffold command they modify.
+
+The English prose analyzer was rerun on the complete README. It reports 3,838
+source words, 2,073 reader-facing words, 187 sentences, 111 specificity markers,
+zero formulaic scaffolds, and `finding_eligible: false`. The pre-existing lead
+codes remain `clause_pileup`, `overlong_sentence`, `paragraph_pattern_reuse`, and
+`repeated_openings`; the changed paragraph is not an analyzer example for any
+lead.
+
+Manual passes rechecked the new paragraph and its surrounding task section:
+
+- **Conceptual coherence** — mode, authority, screenshot, renderer, and prefix
+  terms each name a literal scaffold input or output behavior.
+- **Sentence portability** — the paragraph names `scaffold_audit.py`, exact CLI
+  flags, supported formats, the self-contained dashboard, and the prefix shape;
+  it cannot describe an unrelated generic tool without material changes.
+- **Discourse purpose** — every sentence answers a distinct operator question:
+  how to start, how to record implementation authority, how to seed screenshots,
+  and which IDs are accepted.
+- **Voice and subtext** — the wording remains direct and workmanlike, without
+  promotional claims or invented assurances.
+- **Terminology and information sequence** — options sit immediately after the
+  base scaffold command and use the exact public CLI spellings.
+- **Claim support and provenance** — the claims are exercised by
+  `scripts/test_scaffold_audit.py`, including the renderer embedding path and the
+  fail-before-write prefix case.
+- **Action and recovery clarity** — the paragraph gives the exact authorized
+  redesign flags, the repeatable screenshot input, accepted image formats, and
+  the valid prefix boundary.
+- **Voice and audience fit** — the detail is appropriate for operators starting
+  a durable audit bundle and does not burden the earlier product overview.
+
+**Cleared:** no active editorial-slop finding in the current README. This refresh
+binds the badge to the changed file and makes no authorship assessment.

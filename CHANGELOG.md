@@ -4,7 +4,9 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
-Nothing yet.
+- Made `scaffold_audit.py` fail before writing when an explicit item prefix cannot produce a valid durable ID, with regression coverage for the previously broken `OMP-MOB` path.
+- Added contract-safe `--mode` and `--repository-write-authority` scaffold inputs so explicitly authorized redesign and design runs start with matching run receipts and source-write capability.
+- Added repeatable `--supplied-screenshot` inputs that type supplied raster evidence, copy bounded recognized images into the bundle, and make them directly embeddable by the self-contained dashboard renderer.
 
 ## 3.0.0 — 2026-08-20
 

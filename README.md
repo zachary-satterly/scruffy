@@ -407,7 +407,7 @@ Compatibility note: durable report markers and browser-storage keys retain the i
 
 ## Start a new report bundle from green
 
-`python3 scripts/scaffold_audit.py --audit-id <id> --target <desc> --title <t> --out <dir>` emits a pre-valid findings/context/decisions trio, TODO-seeded and self-validating. Authoring an audit becomes editing a passing document instead of negotiating with the validator.
+`python3 scripts/scaffold_audit.py --audit-id <id> --target <desc> --title <t> --out <dir>` emits a pre-valid findings/context/decisions trio, TODO-seeded and self-validating. Add `--mode redesign --repository-write-authority authorized` when the request explicitly authorizes implementation. Repeat `--supplied-screenshot <path>` to copy recognized PNG, JPEG, GIF, or WebP evidence into the bundle for self-contained dashboard embedding. Explicit item prefixes must be two to six uppercase alphanumeric characters, beginning with a letter. Authoring an audit becomes editing a passing document instead of negotiating with the validator.
 
 ## Repeat an audit without losing history
 
