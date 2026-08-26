@@ -31,6 +31,14 @@ CONTEXT_CONTRACT = AUDIT_CONTRACT["context"]
 CURRENT_CONTEXT_SCHEMA = CONTEXT_CONTRACT["schema_version"]
 LEGACY_CONTEXT_SCHEMAS = set(CONTEXT_CONTRACT.get("legacy_schema_versions", []))
 SUPPORTED_CONTEXT_SCHEMAS = {CURRENT_CONTEXT_SCHEMA, *LEGACY_CONTEXT_SCHEMAS}
+CONTEXT_FEATURE_SCHEMAS = {
+    feature: set(versions)
+    for feature, versions in CONTEXT_CONTRACT["feature_schema_versions"].items()
+}
+VISUAL_CONTEXT_SCHEMAS = CONTEXT_FEATURE_SCHEMAS["visual_evidence"]
+ROUTING_CONTEXT_SCHEMAS = CONTEXT_FEATURE_SCHEMAS["routing"]
+REVIEW_LANES = {row["key"]: row for row in CONTEXT_CONTRACT["review_lanes"]}
+SPECIALIST_LANES = {key for key, row in REVIEW_LANES.items() if row["owner"] == "specialist"}
 VISUAL_ANNOTATION_STATUSES = set(CONTEXT_CONTRACT["visual_annotation_statuses"])
 VISUAL_ANNOTATION_MAX_REGIONS = CONTEXT_CONTRACT["visual_annotation_max_regions"]
 EDITORIAL_CONTRACT = AUDIT_CONTRACT["editorial_review"]
@@ -45,6 +53,9 @@ NON_FINDING_SEVERITIES = {"high", "medium", "low", "none"}
 ITEM_ID = re.compile(r"^[A-Z][A-Z0-9]{1,5}-\d{1,4}$")
 IDENTITY_KEY = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EVIDENCE_ID = re.compile(r"^EV-[A-Z0-9][A-Z0-9-]{0,31}$")
+ROUTING_ID = re.compile(r"^ROUTE-[A-Z0-9][A-Z0-9-]{0,31}$")
+ASSUMPTION_ID = re.compile(r"^ASM-[A-Z0-9][A-Z0-9-]{0,31}$")
+REFERRAL_ID = re.compile(r"^REF-[A-Z0-9][A-Z0-9-]{0,31}$")
 ACTIVE_FINDING_STATUSES = {"open", "needs-verification"}
 RUNTIME_EVIDENCE_KINDS = {"runtime_trace", "measurement"}
 RENDERED_EVIDENCE_KINDS = {"screenshot", "task_observation"}
@@ -105,6 +116,13 @@ REQUIRED_DASHBOARD_SECTIONS = {
     "work-orders",
     "checks-not-run",
 }
+ROUTING_REPORT_SECTIONS = {"routing", "assumptions", "referrals"}
+LEDGER_REVISION_FIELDS = {
+    "first_seen_revision",
+    "last_observed_revision",
+    "revision_disposition",
+    "disposition_reason",
+}
 
 
 def fail(message: str) -> None:
@@ -156,6 +174,30 @@ def validate_evidence_id(value: Any, label: str) -> str:
     if not EVIDENCE_ID.fullmatch(evidence_id):
         fail(f"{label} must match {EVIDENCE_ID.pattern}")
     return evidence_id
+
+
+def validate_ledger_revision(
+    row: dict[str, Any],
+    label: str,
+    *,
+    revision_id: str,
+    baseline_revision_id: str | None,
+) -> None:
+    first_seen = require_text(row.get("first_seen_revision"), f"{label}.first_seen_revision")
+    last_observed = require_text(row.get("last_observed_revision"), f"{label}.last_observed_revision")
+    if last_observed != revision_id:
+        fail(f"{label}.last_observed_revision must equal context.revision_id")
+    disposition = row.get("revision_disposition")
+    if disposition not in CONTEXT_CONTRACT["ledger_revision_dispositions"]:
+        fail(f"{label}.revision_disposition is invalid")
+    require_text(row.get("disposition_reason"), f"{label}.disposition_reason")
+    if baseline_revision_id is None:
+        if disposition != "new":
+            fail(f"{label}.revision_disposition must be new in a baseline context")
+        if first_seen != revision_id:
+            fail(f"{label}.first_seen_revision must equal context.revision_id for a new ledger row")
+    elif disposition == "new" and first_seen != revision_id:
+        fail(f"{label}.first_seen_revision must equal context.revision_id for a new ledger row")
 
 
 def validate_run(registry: dict[str, Any], source: str) -> dict[str, Any]:
@@ -611,15 +653,29 @@ def validate_context(
     context_schema = context.get("schema_version")
     if context_schema not in SUPPORTED_CONTEXT_SCHEMAS:
         fail(f"context.schema_version must be one of {sorted(SUPPORTED_CONTEXT_SCHEMAS)}")
-    if context_schema == CURRENT_CONTEXT_SCHEMA:
+    if context_schema in VISUAL_CONTEXT_SCHEMAS:
         required.add("visual_evidence")
+    if context_schema in ROUTING_CONTEXT_SCHEMAS:
+        required.update({"baseline_revision_id", "scruffy_applicability", "routing", "assumptions", "referrals"})
     missing = sorted(required - set(context))
     if missing:
         fail(f"context missing fields: {missing}")
     for field in ("audit_id", "revision_id"):
         if context.get(field) != registry.get(field):
             fail(f"context.{field} does not match registry")
+    baseline_revision_id = context.get("baseline_revision_id")
+    if context_schema in ROUTING_CONTEXT_SCHEMAS:
+        if baseline_revision_id is not None and (
+            not isinstance(baseline_revision_id, str) or not baseline_revision_id.strip()
+        ):
+            fail("context.baseline_revision_id must be null or a non-empty string")
+        if baseline_revision_id != registry.get("baseline_revision_id"):
+            fail("context.baseline_revision_id does not match registry")
     require_text(context.get("title"), "context.title")
+    scruffy_applicability = context.get("scruffy_applicability")
+    if context_schema in ROUTING_CONTEXT_SCHEMAS:
+        if scruffy_applicability not in CONTEXT_CONTRACT["scruffy_applicability_statuses"]:
+            fail("context.scruffy_applicability is invalid")
 
     outcome = context.get("outcome")
     if not isinstance(outcome, dict):
@@ -657,6 +713,35 @@ def validate_context(
                 candidate = base_path / candidate
             if not candidate.exists():
                 fail(f"{label}.locator does not exist: {locator}")
+        if kind == "specialist_review":
+            receipt = asset.get("specialist_review")
+            if not isinstance(receipt, dict):
+                fail(f"{label}.specialist_review must be an object")
+            discipline = receipt.get("discipline")
+            if discipline not in SPECIALIST_LANES:
+                fail(f"{label}.specialist_review.discipline must name a specialist-owned review lane")
+            for field in ("reviewer_or_authority", "scope", "result"):
+                require_text(receipt.get(field), f"{label}.specialist_review.{field}")
+            reviewed_at = receipt.get("reviewed_at")
+            artifact_version = receipt.get("artifact_version")
+            if reviewed_at is not None:
+                require_text(reviewed_at, f"{label}.specialist_review.reviewed_at")
+            if artifact_version is not None:
+                require_text(artifact_version, f"{label}.specialist_review.artifact_version")
+            if reviewed_at is None and artifact_version is None:
+                fail(
+                    f"{label}.specialist_review requires reviewed_at or artifact_version metadata"
+                )
+            if receipt.get("verification_state") not in CONTEXT_CONTRACT["specialist_review_verification_states"]:
+                fail(f"{label}.specialist_review.verification_state is invalid")
+            if verification == "not_verified" and receipt.get("verification_state") == "verified":
+                fail(f"{label}.specialist_review cannot be verified when the evidence asset is not_verified")
+            if not explicit_uri and verification != "not_verified":
+                candidate = Path(locator.split("#", 1)[0])
+                if not candidate.is_absolute():
+                    candidate = base_path / candidate
+                if not candidate.exists():
+                    fail(f"{label}.locator does not exist: {locator}")
         by_evidence[evidence_id] = asset
 
     def check_refs(value: Any, label: str, *, allow_empty: bool = False) -> list[str]:
@@ -705,6 +790,10 @@ def validate_context(
         if task.get("status") not in CONTEXT_CONTRACT["task_statuses"]:
             fail(f"{label}.status is invalid")
         check_refs(task.get("evidence_refs"), f"{label}.evidence_refs")
+    if scruffy_applicability == "not_applicable" and any(
+        task.get("status") != "not_run" for task in tasks
+    ):
+        fail("context.tasks must all be not_run when Scruffy is not applicable")
 
     capability_rows = context.get("capabilities")
     if not isinstance(capability_rows, list):
@@ -735,6 +824,193 @@ def validate_context(
     if run["repository_writes_performed"] and source_write_status not in {"available", "partial"}:
         fail("context.capabilities source_write must be available or partial when repository writes occurred")
 
+    if context_schema in ROUTING_CONTEXT_SCHEMAS:
+        referrals = context.get("referrals")
+        if not isinstance(referrals, list):
+            fail("context.referrals must be an array")
+        referrals_by_id: dict[str, dict[str, Any]] = {}
+        referral_questions: set[tuple[str, str]] = set()
+        for index, row in enumerate(referrals):
+            label = f"context.referrals[{index}]"
+            if not isinstance(row, dict):
+                fail(f"{label} must be an object")
+            referral_id = require_text(row.get("id"), f"{label}.id")
+            if not REFERRAL_ID.fullmatch(referral_id):
+                fail(f"{label}.id must match {REFERRAL_ID.pattern}")
+            if referral_id in referrals_by_id:
+                fail(f"context.referrals repeats {referral_id}")
+            validate_ledger_revision(
+                row,
+                label,
+                revision_id=context["revision_id"],
+                baseline_revision_id=baseline_revision_id,
+            )
+            lane = row.get("lane")
+            if lane not in SPECIALIST_LANES:
+                fail(f"{label}.lane must name a specialist-owned review lane")
+            for field in ("summary", "reason", "claim_boundary"):
+                require_text(row.get(field), f"{label}.{field}")
+            question_key = (lane, row["summary"])
+            if question_key in referral_questions:
+                fail(f"context.referrals repeats the same specialist question in lane {lane}")
+            referral_questions.add(question_key)
+            if row.get("review_status") not in CONTEXT_CONTRACT["referral_review_statuses"]:
+                fail(f"{label}.review_status is invalid")
+            evidence_refs = check_refs(row.get("evidence_refs"), f"{label}.evidence_refs", allow_empty=False)
+            specialist_artifact_refs = check_refs(
+                row.get("specialist_artifact_refs"),
+                f"{label}.specialist_artifact_refs",
+                allow_empty=True,
+            )
+            unattached_specialist_refs = sorted(set(specialist_artifact_refs) - set(evidence_refs))
+            if unattached_specialist_refs:
+                fail(f"{label}.specialist_artifact_refs must also appear in evidence_refs")
+            review_status = row.get("review_status")
+            if review_status == "complete" and not specialist_artifact_refs:
+                fail(f"{label}.specialist_artifact_refs cannot be empty when review_status is complete")
+            if review_status == "not_run" and specialist_artifact_refs:
+                fail(f"{label}.specialist_artifact_refs must be empty when review_status is not_run")
+            specialist_receipts = [
+                by_evidence[evidence_id]
+                for evidence_id in specialist_artifact_refs
+                if by_evidence[evidence_id].get("kind") == "specialist_review"
+            ]
+            if review_status == "complete" and not specialist_receipts:
+                fail(
+                    f"{label}: complete specialist referral requires a typed specialist_review receipt"
+                )
+            for receipt_asset in specialist_receipts:
+                receipt = receipt_asset["specialist_review"]
+                if receipt["discipline"] != lane:
+                    fail(
+                        f"{label}: specialist_review discipline {receipt['discipline']} does not match referral lane {lane}"
+                    )
+            if review_status == "complete" and not any(
+                asset["specialist_review"]["verification_state"] == "verified"
+                for asset in specialist_receipts
+            ):
+                fail(
+                    f"{label}: complete specialist referral requires a verified specialist_review receipt"
+                )
+            referrals_by_id[referral_id] = row
+
+        routing = context.get("routing")
+        if not isinstance(routing, list):
+            fail("context.routing must be an array")
+        routing_by_lane: dict[str, dict[str, Any]] = {}
+        routing_ids: set[str] = set()
+        linked_referral_ids: set[str] = set()
+        for index, row in enumerate(routing):
+            label = f"context.routing[{index}]"
+            if not isinstance(row, dict):
+                fail(f"{label} must be an object")
+            routing_id = require_text(row.get("id"), f"{label}.id")
+            if not ROUTING_ID.fullmatch(routing_id):
+                fail(f"{label}.id must match {ROUTING_ID.pattern}")
+            if routing_id in routing_ids:
+                fail(f"context.routing repeats {routing_id}")
+            routing_ids.add(routing_id)
+            validate_ledger_revision(
+                row,
+                label,
+                revision_id=context["revision_id"],
+                baseline_revision_id=baseline_revision_id,
+            )
+            lane = row.get("lane")
+            if lane not in REVIEW_LANES:
+                fail(f"{label}.lane is invalid")
+            if lane in routing_by_lane:
+                fail(f"context.routing repeats {lane}")
+            disposition = row.get("disposition")
+            if disposition not in CONTEXT_CONTRACT["lane_dispositions"]:
+                fail(f"{label}.disposition is invalid")
+            require_text(row.get("reason"), f"{label}.reason")
+            evidence_refs = check_refs(row.get("evidence_refs"), f"{label}.evidence_refs", allow_empty=True)
+            referral_ids = require_unique_text_list(row.get("referral_ids"), f"{label}.referral_ids")
+            unknown_referrals = sorted(set(referral_ids) - set(referrals_by_id))
+            if unknown_referrals:
+                fail(f"{label}.referral_ids contains unknown referrals: {unknown_referrals}")
+            if lane == "core_interface":
+                expected_core = "not_applicable" if scruffy_applicability == "not_applicable" else "selected"
+                if disposition != expected_core:
+                    fail(
+                        f"context.routing core_interface must be {expected_core} when Scruffy applicability is {scruffy_applicability}"
+                    )
+            if REVIEW_LANES[lane]["owner"] == "specialist" and disposition == "selected":
+                fail(f"{label} cannot select specialist-owned lane {lane} as Scruffy work")
+            if disposition in {"selected", "referred"} and not evidence_refs:
+                fail(f"{label}.evidence_refs cannot be empty when disposition is {disposition}")
+            if disposition == "referred":
+                if not referral_ids:
+                    fail(f"{label}.referral_ids cannot be empty when disposition is referred")
+                wrong_lane = sorted(
+                    referral_id
+                    for referral_id in referral_ids
+                    if referrals_by_id[referral_id]["lane"] != lane
+                )
+                if wrong_lane:
+                    fail(f"{label}.referral_ids belongs to another lane: {wrong_lane}")
+            elif referral_ids:
+                fail(f"{label}.referral_ids must be empty unless disposition is referred")
+            linked_referral_ids.update(referral_ids)
+            routing_by_lane[lane] = row
+        if set(routing_by_lane) != set(REVIEW_LANES):
+            fail(f"context.routing must cover exactly {sorted(REVIEW_LANES)}")
+        if scruffy_applicability == "not_applicable":
+            selected_scruffy_lanes = sorted(
+                lane
+                for lane, row in routing_by_lane.items()
+                if REVIEW_LANES[lane]["owner"] == "scruffy" and row["disposition"] == "selected"
+            )
+            if selected_scruffy_lanes:
+                fail(
+                    "context.routing cannot select Scruffy-owned lanes when Scruffy is not applicable: "
+                    f"{selected_scruffy_lanes}"
+                )
+            if registry.get("items"):
+                fail("registry.items must be empty for a non-interface stop-and-refer result")
+        orphan_referrals = sorted(set(referrals_by_id) - linked_referral_ids)
+        if orphan_referrals:
+            fail(f"context.referrals contains unlinked referrals: {orphan_referrals}")
+
+        assumptions = context.get("assumptions")
+        if not isinstance(assumptions, list):
+            fail("context.assumptions must be an array")
+        assumption_ids: set[str] = set()
+        assumption_propositions: set[str] = set()
+        for index, row in enumerate(assumptions):
+            label = f"context.assumptions[{index}]"
+            if not isinstance(row, dict):
+                fail(f"{label} must be an object")
+            assumption_id = require_text(row.get("id"), f"{label}.id")
+            if not ASSUMPTION_ID.fullmatch(assumption_id):
+                fail(f"{label}.id must match {ASSUMPTION_ID.pattern}")
+            if assumption_id in assumption_ids:
+                fail(f"context.assumptions repeats {assumption_id}")
+            assumption_ids.add(assumption_id)
+            validate_ledger_revision(
+                row,
+                label,
+                revision_id=context["revision_id"],
+                baseline_revision_id=baseline_revision_id,
+            )
+            for field in ("statement", "risk_if_wrong", "evidence_needed", "decision_affected"):
+                require_text(row.get(field), f"{label}.{field}")
+            if row["statement"] in assumption_propositions:
+                fail("context.assumptions repeats the same proposition under multiple IDs")
+            assumption_propositions.add(row["statement"])
+            basis = row.get("basis")
+            if basis not in CONTEXT_CONTRACT["product_frame_bases"]:
+                fail(f"{label}.basis is invalid")
+            if row.get("confidence") not in CONTEXT_CONTRACT["assumption_confidence"]:
+                fail(f"{label}.confidence is invalid")
+            status = row.get("status")
+            if status not in CONTEXT_CONTRACT["assumption_statuses"]:
+                fail(f"{label}.status is invalid")
+            evidence_refs = check_refs(row.get("evidence_refs"), f"{label}.evidence_refs", allow_empty=True)
+            if (basis != "unknown" or status in {"supported", "refuted"}) and not evidence_refs:
+                fail(f"{label}.evidence_refs cannot be empty for a grounded or resolved assumption")
+
     scores = context.get("scores")
     if not isinstance(scores, list):
         fail("context.scores must be an array")
@@ -755,6 +1031,10 @@ def validate_context(
         by_score[category] = row
     if set(by_score) != CANONICAL_CATEGORIES:
         fail(f"context.scores must cover exactly {sorted(CANONICAL_CATEGORIES)}")
+    if scruffy_applicability == "not_applicable" and any(
+        row.get("score") != "N/A" for row in scores
+    ):
+        fail("context.scores must all be N/A when Scruffy is not applicable")
 
     checks_not_run = context.get("checks_not_run")
     if not isinstance(checks_not_run, list):
@@ -769,6 +1049,8 @@ def validate_context(
     work_orders = context.get("work_orders")
     if not isinstance(work_orders, list):
         fail("context.work_orders must be an array")
+    if scruffy_applicability == "not_applicable" and work_orders:
+        fail("context.work_orders must be empty when Scruffy is not applicable")
     registry_ids = {item["id"] for item in registry["items"]}
     work_ids: set[str] = set()
     for index, row in enumerate(work_orders):
@@ -874,13 +1156,84 @@ def validate_context(
     return by_evidence
 
 
+def validate_context_continuity(
+    current: dict[str, Any],
+    baseline: dict[str, Any],
+) -> None:
+    """Fail closed when context-1.2 durable ledgers disappear or change identity."""
+    if current.get("schema_version") not in ROUTING_CONTEXT_SCHEMAS:
+        return
+    if current.get("audit_id") != baseline.get("audit_id"):
+        fail("current and baseline context audit_id differ")
+    if current.get("baseline_revision_id") != baseline.get("revision_id"):
+        fail("current context baseline_revision_id must equal baseline context revision_id")
+
+    current_revision = current["revision_id"]
+    if baseline.get("schema_version") not in ROUTING_CONTEXT_SCHEMAS:
+        for ledger_name in ("routing", "assumptions", "referrals"):
+            for row in current.get(ledger_name, []):
+                if row.get("revision_disposition") != "new":
+                    fail(
+                        f"context.{ledger_name} rows introduced after a legacy baseline must use revision_disposition new"
+                    )
+                if row.get("first_seen_revision") != current_revision:
+                    fail(
+                        f"context.{ledger_name} rows introduced after a legacy baseline must start in the current revision"
+                    )
+        return
+
+    ledger_specs = {
+        "routing": ("id", lambda row: row.get("lane"), "routing lane"),
+        "assumptions": ("id", lambda row: row.get("statement"), "assumption proposition"),
+        "referrals": (
+            "id",
+            lambda row: (row.get("lane"), row.get("summary")),
+            "specialist question",
+        ),
+    }
+    for ledger_name, (id_field, identity, identity_label) in ledger_specs.items():
+        prior_rows = baseline.get(ledger_name, [])
+        current_rows = current.get(ledger_name, [])
+        prior_by_id = {row[id_field]: row for row in prior_rows}
+        current_by_id = {row[id_field]: row for row in current_rows}
+        prior_identity = {identity(row): row[id_field] for row in prior_rows}
+        for row_id, row in current_by_id.items():
+            prior = prior_by_id.get(row_id)
+            if prior is None:
+                reused = prior_identity.get(identity(row))
+                if reused:
+                    fail(
+                        f"context.{ledger_name} ID {row_id} reissues baseline {identity_label} from {reused}"
+                    )
+                if row.get("revision_disposition") != "new":
+                    fail(f"new context.{ledger_name} row {row_id} must use revision_disposition new")
+                if row.get("first_seen_revision") != current_revision:
+                    fail(f"new context.{ledger_name} row {row_id} must start in the current revision")
+                continue
+
+            if identity(row) != identity(prior):
+                fail(f"context.{ledger_name} ID {row_id} was reused for a different {identity_label}")
+            if row.get("first_seen_revision") != prior.get("first_seen_revision"):
+                fail(f"context.{ledger_name} row {row_id}.first_seen_revision changed")
+            prior_state = {key: value for key, value in prior.items() if key not in LEDGER_REVISION_FIELDS}
+            current_state = {key: value for key, value in row.items() if key not in LEDGER_REVISION_FIELDS}
+            expected = "carried" if current_state == prior_state else "updated"
+            if row.get("revision_disposition") != expected:
+                fail(
+                    f"context.{ledger_name} row {row_id} must use revision_disposition {expected}"
+                )
+        missing = sorted(set(prior_by_id) - set(current_by_id))
+        if missing:
+            fail(f"context.{ledger_name} silently dropped baseline IDs: {missing}")
+
+
 def validate_visual_evidence(
     context: dict[str, Any],
     items: dict[str, dict[str, Any]],
     by_evidence: dict[str, dict[str, Any]],
 ) -> dict[tuple[str, str | None], dict[str, Any]]:
     """Validate claim-specific context for every captured screenshot placement."""
-    if context.get("schema_version") in LEGACY_CONTEXT_SCHEMAS:
+    if context.get("schema_version") not in VISUAL_CONTEXT_SCHEMAS:
         return {}
 
     rows = context.get("visual_evidence")
@@ -1062,7 +1415,10 @@ def validate_dashboard(
         parser.feed(path.read_text(encoding="utf-8"))
     except OSError as error:
         fail(f"dashboard unreadable: {error}")
-    missing_sections = sorted(REQUIRED_DASHBOARD_SECTIONS - parser.section_ids)
+    required_sections = set(REQUIRED_DASHBOARD_SECTIONS)
+    if context is not None and context.get("schema_version") in ROUTING_CONTEXT_SCHEMAS:
+        required_sections.update(ROUTING_REPORT_SECTIONS)
+    missing_sections = sorted(required_sections - parser.section_ids)
     if missing_sections:
         fail(f"dashboard missing required sections: {missing_sections}")
     duplicates = sorted({item_id for item_id in parser.item_ids if parser.item_ids.count(item_id) > 1})
@@ -1135,7 +1491,7 @@ def validate_dashboard(
             f"{sorted(missing_item_pairs)}"
         )
 
-    if context.get("schema_version") == CURRENT_CONTEXT_SCHEMA:
+    if context.get("schema_version") in VISUAL_CONTEXT_SCHEMAS:
         all_evidence_assets = evidence_by_id(context)
         public_item_labels = item_label_map(list(items.values()))
         visual_by_pair = validate_visual_evidence(context, items, screenshot_assets)
@@ -1190,6 +1546,9 @@ def validate_dashboard(
             *all_evidence_assets,
             *(str(row.get("id")) for row in context.get("tasks", []) if isinstance(row, dict) and row.get("id")),
             *(str(row.get("id")) for row in context.get("work_orders", []) if isinstance(row, dict) and row.get("id")),
+            *(str(row.get("id")) for row in context.get("routing", []) if isinstance(row, dict) and row.get("id")),
+            *(str(row.get("id")) for row in context.get("assumptions", []) if isinstance(row, dict) and row.get("id")),
+            *(str(row.get("id")) for row in context.get("referrals", []) if isinstance(row, dict) and row.get("id")),
         }
         exposed_references = sorted(
             reference
@@ -1203,7 +1562,11 @@ def validate_dashboard(
             )
 
 
-def validate_markdown(path: Path, registry: dict[str, Any]) -> None:
+def validate_markdown(
+    path: Path,
+    registry: dict[str, Any],
+    context: dict[str, Any] | None = None,
+) -> None:
     items = validate_registry(registry, "registry")
     try:
         text = path.read_text(encoding="utf-8")
@@ -1211,7 +1574,10 @@ def validate_markdown(path: Path, registry: dict[str, Any]) -> None:
         fail(f"Markdown report unreadable: {error}")
     section_ids = set(re.findall(r"<!--\s*anti-slop-section:([a-z-]+)\s*-->", text))
     item_ids = re.findall(r"<!--\s*anti-slop-item:([A-Z][A-Z0-9-]+)\s*-->", text)
-    missing_sections = sorted(REQUIRED_DASHBOARD_SECTIONS - section_ids)
+    required_sections = set(REQUIRED_DASHBOARD_SECTIONS)
+    if context is not None and context.get("schema_version") in ROUTING_CONTEXT_SCHEMAS:
+        required_sections.update(ROUTING_REPORT_SECTIONS)
+    missing_sections = sorted(required_sections - section_ids)
     if missing_sections:
         fail(f"Markdown report missing required sections: {missing_sections}")
     duplicates = sorted({item_id for item_id in item_ids if item_ids.count(item_id) > 1})
@@ -1256,6 +1622,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("registry", type=Path)
     parser.add_argument("--context", type=Path)
     parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--baseline-context", type=Path)
     parser.add_argument("--decisions", type=Path)
     parser.add_argument("--baseline-decisions", type=Path)
     parser.add_argument("--dashboard", type=Path)
@@ -1277,15 +1644,37 @@ def main() -> int:
     context = load_json(args.context) if args.context else None
     if context is not None:
         validate_context(context, registry, base_path=args.context.parent)
+    if args.baseline_context and not args.baseline:
+        fail("--baseline-context requires --baseline")
+    if (
+        context is not None
+        and context.get("schema_version") in ROUTING_CONTEXT_SCHEMAS
+        and registry.get("baseline_revision_id") is not None
+        and not args.baseline_context
+    ):
+        fail("context 1.2 revisions require --baseline-context to validate durable ledger continuity")
+    baseline_registry = None
     if args.baseline:
-        validate_baseline(registry, load_json(args.baseline))
+        baseline_registry = load_json(args.baseline)
+        validate_baseline(registry, baseline_registry)
+    if args.baseline_context:
+        if context is None or baseline_registry is None:
+            fail("--baseline-context requires current --context and --baseline artifacts")
+        baseline_context = load_json(args.baseline_context)
+        if baseline_registry.get("schema_version") == CURRENT_SCHEMA_VERSION:
+            validate_context(
+                baseline_context,
+                baseline_registry,
+                base_path=args.baseline_context.parent,
+            )
+        validate_context_continuity(context, baseline_context)
     if args.decisions:
         baseline_decisions = load_json(args.baseline_decisions) if args.baseline_decisions else None
         validate_decisions(load_json(args.decisions), registry, baseline_decisions)
     if args.dashboard:
         validate_dashboard(args.dashboard, registry, context)
     if args.markdown:
-        validate_markdown(args.markdown, registry)
+        validate_markdown(args.markdown, registry, context)
     # The prose lint existed and nothing called it, so a report could be
     # schema-perfect and unreadable and still pass. Leads are informational by
     # design; --strict-prose promotes them to a gate.
@@ -1295,6 +1684,8 @@ def main() -> int:
         checks.append("context and evidence")
     if args.baseline:
         checks.append("baseline continuity")
+    if args.baseline_context:
+        checks.append("context ledger continuity")
     if args.decisions:
         checks.append("decisions")
     if prose_leads is not None:

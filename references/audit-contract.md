@@ -31,9 +31,32 @@ Every substantial audit records exactly these capabilities. Missing capability i
 
 ## Evidence receipts
 
-Schema-2.1 context stores evidence as typed receipts with an immutable ID, kind, locator, description, and verification state. Registry items reference those IDs through `evidence_refs`. A local screenshot or source locator must exist when the validator can resolve it. URLs must use HTTP or HTTPS. A non-empty prose claim is not an evidence receipt.
+Schema-2.1 context stores evidence as typed receipts with an immutable ID, kind, locator, description, and verification state. Registry items reference those IDs through `evidence_refs`. A local screenshot or source locator must exist when the validator can resolve it. URLs must use HTTP or HTTPS. A non-empty prose claim is not an evidence receipt. A `specialist_review` receipt additionally records its discipline, reviewer or authority, scope, result, date or artifact version, and a verified/not-verified state.
 
-New audits emit context schema 1.1. Every locally captured screenshot has one claim-specific visual context for each registry item that cites it, or one unlinked context when no item cites it. Each context records the operated state, a precise `look_at` instruction, the connection to the claim, and an annotation decision. `provided` annotations contain one to four percentage-based rectangles with visible labels. `not_needed` requires a reason explaining why the whole frame is the evidence or why an overlay would misrepresent a nonvisual claim. Generic asset descriptions do not satisfy this contract.
+New audits emit context schema 1.2. Every locally captured screenshot has one claim-specific visual context for each registry item that cites it, or one unlinked context when no item cites it. Each context records the operated state, a precise `look_at` instruction, the connection to the claim, and an annotation decision. `provided` annotations contain one to four percentage-based rectangles with visible labels. `not_needed` requires a reason explaining why the whole frame is the evidence or why an overlay would misrepresent a nonvisual claim. Generic asset descriptions do not satisfy this contract.
+
+## Review routing
+
+Context schema 1.2 records `scruffy_applicability` and every canonical review lane exactly once as `selected`, `rejected`, `not_applicable`, or `referred`. `core_interface` is selected when Scruffy is applicable or applicability is uncertain. A non-interface stop-and-refer records `scruffy_applicability: not_applicable`, marks `core_interface` not applicable, selects no Scruffy-owned lane, and emits no interface findings or work orders. Specialist-owned lanes cannot be selected as if Scruffy performed them: they are rejected with a reason, marked not applicable, or linked to a typed referral. A referral records its specialist lane, review status, evidence references, and the claim Scruffy will not make without that specialist evidence. `complete` requires at least one verified, lane-matched `specialist_review` receipt; `not_run` forbids specialist artifacts.
+
+The routing ledger is separate from the eight finding categories. Lane keys never appear in `items[].category`, and specialist results never leak into Scruffy's registry as improvised ninth categories.
+
+Routing, assumptions, and referrals are durable ledgers. Each row carries a stable ID, first-seen and last-observed revisions, and an explicit `new`, `carried`, or `updated` disposition. A context 1.2 revision records `baseline_revision_id` and must be validated with its baseline context; prior rows cannot disappear or be reissued under new IDs.
+
+Assumptions are durable records with an ID, basis, confidence, risk if wrong, evidence needed, affected decision, status, and evidence references. Open assumptions may lack supporting evidence; supported or refuted assumptions may not.
+
+Canonical lanes:
+
+- `core_interface` — Core interface audit (scruffy): The eight canonical interface categories, representative tasks, rendered states, and implementation consequences.
+- `service_journey` — End-to-end service journey (scruffy): Cross-channel handoffs, actors, recovery paths, and visible service gaps around the interface.
+- `media_ingestion` — Media ingestion (scruffy): Capture, upload, transformation, moderation, projection, download, deletion, and visible failure states for media products.
+- `shared_output` — Shared or physical output (scruffy): Ceremonial, projected, printed, QR, and other shared-output interface surfaces within available evidence.
+- `api_contract` — API contract review (specialist): API semantics, compatibility, authorization, and protocol correctness beyond observable interface consequences.
+- `security` — Security review (specialist): Threat modeling, vulnerability discovery, exploitability, and security severity.
+- `privacy` — Privacy review (specialist): Data-subject harms, minimization, retention, consent, and privacy-law analysis beyond visible interface consequences.
+- `reliability` — Reliability and operations review (specialist): Production availability, observability, incident response, capacity, and provider operations.
+- `legal_compliance` — Legal and compliance review (specialist): Legal sufficiency, jurisdiction-specific obligations, regulated claims, and policy approval.
+- `physical_testing` — Physical and real-device testing (specialist): Real-device, venue, lighting, distance, printer, projector, signage, and other physical acceptance evidence.
 
 ## Editorial review
 
@@ -45,4 +68,4 @@ Allowed independent sentence-signal families are: `rhythm`, `rhetorical_structur
 
 ## Backward compatibility
 
-Schema 2.0 and context schema 1.0 remain readable so published audit history survives. New audits emit registry schema 2.1 with context schema 1.1. A new revision may reconcile an older baseline without rewriting the baseline artifact.
+Schema 2.0 and context schemas 1.0 and 1.1 remain readable so published audit history survives. New audits emit registry schema 2.1 with context schema 1.2. Visual-evidence checks remain active for both context 1.1 and 1.2; routing checks apply only to context 1.2. A new revision may reconcile an older baseline without rewriting it, but it must supply the baseline context to the validator; ledgers introduced after a legacy context are explicitly marked `new`.

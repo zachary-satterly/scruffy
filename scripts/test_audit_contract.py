@@ -226,11 +226,71 @@ def build_fixture(base: Path) -> tuple[dict, dict]:
         "schema_version": contract["context"]["schema_version"],
         "audit_id": registry["audit_id"],
         "revision_id": registry["revision_id"],
+        "baseline_revision_id": None,
+        "scruffy_applicability": "applicable",
         "title": "Audit-contract fixture",
         "outcome": {"label": "Sound with material gaps", "summary": "One editorial finding.", "confidence": "high"},
         "product_frame": question_rows,
         "tasks": tasks,
         "capabilities": capabilities,
+        "routing": [
+            {
+                "id": f"ROUTE-{row['key'].replace('_', '-').upper()}",
+                "lane": row["key"],
+                "disposition": (
+                    "selected" if row["key"] == "core_interface"
+                    else "referred" if row["key"] == "security"
+                    else "not_applicable"
+                ),
+                "reason": (
+                    "The fixture exercises Scruffy's core interface contract."
+                    if row["key"] == "core_interface"
+                    else "The fixture routes security severity outside Scruffy."
+                    if row["key"] == "security"
+                    else "This bounded fixture does not require the lane."
+                ),
+                "evidence_refs": ["EV-TASK"] if row["key"] in {"core_interface", "security"} else [],
+                "referral_ids": ["REF-SECURITY-1"] if row["key"] == "security" else [],
+                "first_seen_revision": registry["revision_id"],
+                "last_observed_revision": registry["revision_id"],
+                "revision_disposition": "new",
+                "disposition_reason": "Baseline routing decision.",
+            }
+            for row in contract["context"]["review_lanes"]
+        ],
+        "assumptions": [
+            {
+                "id": "ASM-AUDIENCE-1",
+                "statement": "The supplied task observations represent the primary reader journey.",
+                "basis": "inferred",
+                "confidence": "moderate",
+                "risk_if_wrong": "The audit could prioritize a secondary journey over the primary one.",
+                "evidence_needed": "Representative usage evidence from the product owner or runtime.",
+                "decision_affected": "Which journey receives first-priority repair work.",
+                "status": "open",
+                "evidence_refs": ["EV-TASK"],
+                "first_seen_revision": registry["revision_id"],
+                "last_observed_revision": registry["revision_id"],
+                "revision_disposition": "new",
+                "disposition_reason": "Baseline assumption.",
+            }
+        ],
+        "referrals": [
+            {
+                "id": "REF-SECURITY-1",
+                "lane": "security",
+                "summary": "Validate any exploitability or security-severity claims separately.",
+                "reason": "Scruffy can inspect interface consequences but does not perform vulnerability validation.",
+                "review_status": "not_run",
+                "claim_boundary": "This audit makes no claim that the fixture is secure.",
+                "evidence_refs": ["EV-TASK"],
+                "specialist_artifact_refs": [],
+                "first_seen_revision": registry["revision_id"],
+                "last_observed_revision": registry["revision_id"],
+                "revision_disposition": "new",
+                "disposition_reason": "Baseline specialist referral.",
+            }
+        ],
         "scores": scores,
         "work_orders": [
             {
@@ -310,17 +370,17 @@ def main() -> int:
         dashboard_path = base / "dashboard.html"
         markdown_path.write_text(render_markdown(registry, context, decisions), encoding="utf-8")
         dashboard_path.write_text(render_dashboard(registry, context, decisions, context_path), encoding="utf-8")
-        validate_markdown(markdown_path, registry)
+        validate_markdown(markdown_path, registry, context)
         validate_dashboard(dashboard_path, registry, context)
 
         dashboard_html = dashboard_path.read_text(encoding="utf-8")
         dashboard_reader_text = reader_text(dashboard_html)
         if ".toolbar{position:static}" not in dashboard_html:
             raise AssertionError("dashboard keeps its large control toolbar sticky on narrow screens")
-        for machine_term in ("AS-01", "EV-COPY", "EV-ANALYZER", "WO-01", "T1", "trust_integrity", "schema-v2", "Receipts:"):
+        for machine_term in ("AS-01", "EV-COPY", "EV-ANALYZER", "WO-01", "T1", "ASM-AUDIENCE-1", "REF-SECURITY-1", "trust_integrity", "schema-v2", "Receipts:"):
             if machine_term in dashboard_reader_text:
                 raise AssertionError(f"dashboard exposes machine-facing term {machine_term}")
-        for plain_term in ("Finding 1", "Journey 1", "Work package 1", "Copy sample", "Trust and content integrity", "Supporting records"):
+        for plain_term in ("Finding 1", "Journey 1", "Work package 1", "Core interface audit", "Security review", "Assumptions that could change the result", "Specialist referrals", "Copy sample", "Trust and content integrity", "Supporting records"):
             if plain_term not in dashboard_reader_text:
                 raise AssertionError(f"dashboard omits plain-language term {plain_term}")
         for empty_state_term in (
@@ -338,7 +398,7 @@ def main() -> int:
             line for line in markdown_path.read_text(encoding="utf-8").splitlines()
             if not line.lstrip().startswith("<!--")
         )
-        for machine_term in ("AS-01", "EV-COPY", "EV-ANALYZER", "WO-01", "T1", "trust_integrity"):
+        for machine_term in ("AS-01", "EV-COPY", "EV-ANALYZER", "WO-01", "T1", "ASM-AUDIENCE-1", "REF-SECURITY-1", "trust_integrity"):
             if machine_term in markdown_reader_text:
                 raise AssertionError(f"Markdown report exposes machine-facing term {machine_term}")
 
@@ -445,6 +505,139 @@ def main() -> int:
         missing_capability = copy.deepcopy(context)
         missing_capability["capabilities"].pop()
         expect_failure(registry, missing_capability, base, "must cover exactly")
+
+        missing_route = copy.deepcopy(context)
+        missing_route["routing"].pop()
+        expect_failure(registry, missing_route, base, "routing must cover exactly")
+
+        non_interface_registry = copy.deepcopy(registry)
+        non_interface_registry["items"] = []
+        non_interface_registry["presentation"] = {
+            "prioritized_finding_ids": [],
+            "prioritized_enhancement_ids": [],
+            "strength_ids": [],
+            "cleared_ids": [],
+        }
+        stop_and_refer = copy.deepcopy(context)
+        stop_and_refer["scruffy_applicability"] = "not_applicable"
+        stop_and_refer["work_orders"] = []
+        for task in stop_and_refer["tasks"]:
+            task["status"] = "not_run"
+            task["result"] = "Scruffy stopped because the supplied target is not an interface."
+        for score in stop_and_refer["scores"]:
+            score["score"] = "N/A"
+            score["evidence"] = "No interface score is claimed for a non-interface target."
+        for route in stop_and_refer["routing"]:
+            if route["lane"] in {"core_interface", "service_journey", "media_ingestion", "shared_output"}:
+                route["disposition"] = "not_applicable"
+                route["reason"] = "The supplied target is not a web interface."
+                route["evidence_refs"] = []
+        validate_registry(non_interface_registry)
+        validate_context(stop_and_refer, non_interface_registry, base_path=base)
+
+        contradictory_stop = copy.deepcopy(stop_and_refer)
+        next(
+            row for row in contradictory_stop["routing"] if row["lane"] == "core_interface"
+        )["disposition"] = "selected"
+        expect_failure(
+            non_interface_registry,
+            contradictory_stop,
+            base,
+            "core_interface must be not_applicable",
+        )
+
+        missed_interface = copy.deepcopy(context)
+        next(row for row in missed_interface["routing"] if row["lane"] == "core_interface")["disposition"] = "not_applicable"
+        expect_failure(registry, missed_interface, base, "core_interface must be selected")
+
+        selected_specialist = copy.deepcopy(context)
+        security_route = next(row for row in selected_specialist["routing"] if row["lane"] == "security")
+        security_route["disposition"] = "selected"
+        security_route["referral_ids"] = []
+        expect_failure(registry, selected_specialist, base, "cannot select specialist-owned lane")
+
+        unlinked_referral = copy.deepcopy(context)
+        unlinked_referral["referrals"].append(
+            {
+                "id": "REF-PRIVACY-1",
+                "lane": "privacy",
+                "summary": "Validate privacy consequences independently.",
+                "reason": "The bounded interface audit cannot prove privacy compliance.",
+                "review_status": "not_run",
+                "claim_boundary": "No privacy-compliance claim is made.",
+                "evidence_refs": ["EV-TASK"],
+                "specialist_artifact_refs": [],
+                "first_seen_revision": registry["revision_id"],
+                "last_observed_revision": registry["revision_id"],
+                "revision_disposition": "new",
+                "disposition_reason": "Baseline specialist referral.",
+            }
+        )
+        expect_failure(registry, unlinked_referral, base, "contains unlinked referrals")
+
+        unsupported_completion = copy.deepcopy(context)
+        unsupported_completion["referrals"][0]["review_status"] = "complete"
+        expect_failure(registry, unsupported_completion, base, "cannot be empty when review_status is complete")
+
+        generic_completion = copy.deepcopy(context)
+        generic_completion["referrals"][0]["review_status"] = "complete"
+        generic_completion["referrals"][0]["specialist_artifact_refs"] = ["EV-TASK"]
+        expect_failure(registry, generic_completion, base, "typed specialist_review receipt")
+
+        verified_completion = copy.deepcopy(context)
+        verified_completion["evidence_assets"].append(
+            {
+                "id": "EV-SPECIALIST",
+                "kind": "specialist_review",
+                "locator": "https://example.com/security-review-v1",
+                "description": "Independent security review receipt covering the bounded fixture.",
+                "verification": "observed",
+                "specialist_review": {
+                    "discipline": "security",
+                    "reviewer_or_authority": "Independent security reviewer",
+                    "scope": "Hostile-input and exploitability review for the bounded fixture.",
+                    "result": "No critical exploitability finding was validated within the stated scope.",
+                    "reviewed_at": "2026-08-25",
+                    "artifact_version": None,
+                    "verification_state": "verified",
+                },
+            }
+        )
+        verified_completion["referrals"][0]["review_status"] = "complete"
+        verified_completion["referrals"][0]["evidence_refs"].append("EV-SPECIALIST")
+        verified_completion["referrals"][0]["specialist_artifact_refs"] = ["EV-SPECIALIST"]
+        validate_context(verified_completion, registry, base_path=base)
+        completed_markdown = render_markdown(registry, verified_completion, decisions)
+        completed_dashboard = render_dashboard(
+            registry,
+            verified_completion,
+            decisions,
+            context_path,
+        )
+        for rendered in (completed_markdown, completed_dashboard):
+            for expected_text in (
+                "Specialist review: Independent security review receipt",
+                "Independent security reviewer",
+                "No critical exploitability finding was validated",
+                "2026-08-25",
+                "Verification: verified",
+            ):
+                if expected_text not in rendered:
+                    raise AssertionError(
+                        f"completed specialist referral omits inspectable evidence {expected_text!r}"
+                    )
+
+        wrong_specialist_discipline = copy.deepcopy(verified_completion)
+        wrong_specialist_discipline["evidence_assets"][-1]["specialist_review"]["discipline"] = "privacy"
+        expect_failure(registry, wrong_specialist_discipline, base, "does not match referral lane")
+
+        unverified_completion = copy.deepcopy(verified_completion)
+        unverified_completion["evidence_assets"][-1]["specialist_review"]["verification_state"] = "not_verified"
+        expect_failure(registry, unverified_completion, base, "requires a verified specialist_review receipt")
+
+        ungrounded_assumption = copy.deepcopy(context)
+        ungrounded_assumption["assumptions"][0]["evidence_refs"] = []
+        expect_failure(registry, ungrounded_assumption, base, "grounded or resolved assumption")
 
         missing_evidence = copy.deepcopy(context)
         missing_evidence["evidence_assets"] = [row for row in missing_evidence["evidence_assets"] if row["id"] != "EV-COPY"]
@@ -575,6 +768,12 @@ def main() -> int:
         missing_visual_context = copy.deepcopy(shot_guarded)
         missing_visual_context["visual_evidence"] = []
         expect_failure(registry, missing_visual_context, base, "omits captured screenshot placements")
+
+        context_1_1_visual_guard = copy.deepcopy(missing_visual_context)
+        context_1_1_visual_guard["schema_version"] = "1.1"
+        for field in ("routing", "assumptions", "referrals"):
+            context_1_1_visual_guard.pop(field)
+        expect_failure(registry, context_1_1_visual_guard, base, "omits captured screenshot placements")
 
         generic_visual_context = copy.deepcopy(shot_guarded)
         generic_visual_context["visual_evidence"][0]["look_at"] = "See image here."

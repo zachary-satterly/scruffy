@@ -44,7 +44,7 @@ repair:
 | Artifact | Schema | Used for |
 |---|---|---|
 | `findings.json` | registry 2.1 | what to repair and how success is checked |
-| `context.json` | 1.1 | dependency-ordered work orders and product truth |
+| `context.json` | 1.2 | dependency-ordered work orders, product truth, routing, assumptions, and referrals |
 | `decisions.json` | 2.1 | the human approval gate |
 | `tokens.json` | 1.0, optional | observed-value token corrections |
 
@@ -52,6 +52,9 @@ An approved decision is not repository authority. Source changes require an
 explicit design/redesign request with source-write permission. Scruffy never
 produces a finding during repair and never marks its own change fixed; that
 status belongs to the subsequent re-audit.
+
+Routing and referral records do not authorize repair work. They preserve the
+audit boundary; only approved `findings.json` items enter the implementation plan.
 
 The compatibility contract is in [`schema/interop.json`](schema/interop.json),
 and the complete artifact handoff is in

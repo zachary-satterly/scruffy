@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from report_contract import score_row_label
+from report_contract import referral_rows, score_row_label
 
 
 def esc(value: object) -> str:
@@ -33,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     scores.sort(key=lambda row: (0, -row["score"]) if isinstance(row.get("score"), int) else (1, 0))
     strengths = [i for i in registry["items"] if i["kind"] == "strength"]
     open_findings = [i for i in registry["items"] if i["kind"] == "finding" and i["status"] in {"open", "needs-verification"}]
+    open_assumptions = [row for row in context.get("assumptions", []) if row.get("status") == "open"]
     rows = "".join(
         f'<tr><td>{esc(score_row_label(row.get("category")))}</td>'
         f'<td class="num">{esc(row.get("score"))}</td><td>{esc(row.get("evidence", ""))}</td></tr>'
@@ -40,6 +41,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     strength_list = "".join(f"<li><b>{esc(s['id'])}</b> {esc(s['title'])}</li>" for s in strengths[:3])
     finding_list = "".join(f"<li><b>{esc(f['id'])}</b> {esc(f['title'])} · {esc(f['severity'])}</li>" for f in open_findings[:3])
+    referral_list = "".join(
+        f"<li><b>{esc(row[0])}</b> {esc(row[1])} Boundary: {esc(row[4])} "
+        f"Supporting records: {esc(row[5])} Specialist result: {esc(row[6])}</li>"
+        for row in referral_rows(context)
+    )
+    assumption_list = "".join(
+        f"<li>{esc(row.get('statement', ''))} Evidence needed: {esc(row.get('evidence_needed', ''))}</li>"
+        for row in open_assumptions
+    )
     html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(context.get('title','Scruffy audit'))}</title>
 <style>
@@ -62,6 +72,8 @@ ul{{padding-left:20px}}li{{margin:4px 0}}
 <table><tr><th>Category</th><th>Score</th><th>Evidence</th></tr>{rows}</table>
 <h2>Top open findings</h2><ul>{finding_list or '<li>None open.</li>'}</ul>
 <h2>Strengths worth preserving</h2><ul>{strength_list or '<li>None recorded.</li>'}</ul>
+<h2>Open assumptions</h2><ul>{assumption_list or '<li>None recorded.</li>'}</ul>
+<h2>Specialist boundaries</h2><ul>{referral_list or '<li>No specialist referrals recorded.</li>'}</ul>
 <div class="badge"><b>SCRUFFY-AUDITED · PROCESS CLAIM ONLY</b><br>
 This badge asserts that a durable, validator-enforced audit registry exists for this
 target and that no prior item was silently dropped. It asserts nothing about quality.

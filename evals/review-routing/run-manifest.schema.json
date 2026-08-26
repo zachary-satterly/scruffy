@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zachary-satterly/scruffy/evals/review-routing/run-manifest.schema.json",
+  "title": "Scruffy review-routing frozen run manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "run_id",
+    "agent",
+    "evidence_class",
+    "evidence_claim",
+    "fixture_set",
+    "case_count",
+    "expected_repetitions",
+    "model_identity",
+    "artifact_paths",
+    "artifact_hashes",
+    "trials",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.1"},
+    "status": {"const": "frozen"},
+    "run_id": {"type": "string", "minLength": 1},
+    "agent": {"type": "string", "minLength": 1},
+    "evidence_class": {"enum": ["public_development", "private_holdout"]},
+    "evidence_claim": {"type": "string", "minLength": 1},
+    "fixture_set": {"type": "string", "pattern": "^review-routing-[a-z0-9._-]+$"},
+    "case_count": {"type": "integer", "minimum": 1},
+    "expected_repetitions": {"type": "integer", "minimum": 1},
+    "model_identity": {"$ref": "#/$defs/model_identity"},
+    "artifact_paths": {
+      "type": "object",
+      "required": ["cases", "archetypes", "audit_contract", "taxonomy", "candidate_schema", "run_manifest_schema", "session_receipt_schema", "thresholds", "runner", "evaluator"],
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "artifact_hashes": {
+      "type": "object",
+      "required": ["cases_sha256", "archetypes_sha256", "audit_contract_sha256", "taxonomy_sha256", "candidate_schema_sha256", "run_manifest_schema_sha256", "session_receipt_schema_sha256", "thresholds_sha256", "runner_sha256", "evaluator_sha256", "scoring_key_sha256"],
+      "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    },
+    "trials": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/trial"}
+    },
+    "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "model_identity": {
+      "type": "object",
+      "required": ["provider", "model", "runtime", "runtime_version"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "runtime": {"type": "string", "minLength": 1},
+        "runtime_version": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "trial": {
+      "type": "object",
+      "required": ["trial_id", "trial_nonce", "prompt", "prompt_sha256", "expected_result", "expected_session_receipt"],
+      "properties": {
+        "trial_id": {"type": "string", "minLength": 1},
+        "trial_nonce": {"type": "string", "minLength": 16},
+        "prompt": {"type": "string", "minLength": 1},
+        "prompt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "expected_result": {"type": "string", "minLength": 1},
+        "expected_session_receipt": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

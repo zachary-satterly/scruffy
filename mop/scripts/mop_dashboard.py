@@ -414,9 +414,15 @@ def _assert_self_contained(doc: str) -> None:
         raise InteropError(f"dashboard is not self-contained; external loaders: {external}")
 
 
-def render(bundle_dir, assets_path, out_path, authorized: bool = False) -> Path:
+def render(
+    bundle_dir,
+    assets_path,
+    out_path,
+    authorized: bool = False,
+    baseline_source=None,
+) -> Path:
     interop = load_interop()
-    bundle = load_bundle(bundle_dir, interop)
+    bundle = load_bundle(bundle_dir, interop, baseline_source=baseline_source)
     plan = build_plan(bundle, interop, authorized)
     base = Path(assets_path).resolve().parent if assets_path else Path(bundle_dir)
     assets = json.loads(Path(assets_path).read_text(encoding="utf-8")) if assets_path else {}
@@ -601,12 +607,22 @@ _TAIL = "</body></html>"
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Generate a self-contained Mop decision dashboard")
     p.add_argument("bundle", help="Scruffy audit bundle directory")
+    p.add_argument(
+        "--baseline-bundle",
+        help="prior Scruffy bundle directory required by a repeat context-1.2 audit",
+    )
     p.add_argument("--assets", help="assets manifest JSON")
     p.add_argument("--out", required=True, help="output HTML path")
     p.add_argument("--authorized", action="store_true")
     args = p.parse_args(argv)
     try:
-        out = render(args.bundle, args.assets, args.out, args.authorized)
+        out = render(
+            args.bundle,
+            args.assets,
+            args.out,
+            args.authorized,
+            args.baseline_bundle,
+        )
     except InteropError as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2

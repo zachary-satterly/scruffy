@@ -34,6 +34,17 @@ def main() -> int:
             default_out = base / "default"
             proc = run_scaffold(default_out)
             require(proc.returncode == 0, f"default scaffold failed: {proc.stdout}{proc.stderr}")
+            default_context = json.loads((default_out / "context.json").read_text(encoding="utf-8"))
+            require(default_context["schema_version"] == "1.2", "scaffold did not emit current context schema 1.2")
+            require(default_context["baseline_revision_id"] is None, "baseline scaffold invented a context baseline")
+            require(default_context["scruffy_applicability"] == "applicable", "scaffold did not default to an applicable interface audit")
+            require(len(default_context["routing"]) == 10, "scaffold did not account for every canonical review lane")
+            core_route = next(row for row in default_context["routing"] if row["lane"] == "core_interface")
+            require(core_route["disposition"] == "selected", "scaffold did not select the required core interface lane")
+            require(core_route["id"] == "ROUTE-CORE-INTERFACE", "scaffold did not emit the stable core routing ID")
+            require(core_route["revision_disposition"] == "new", "baseline route was not marked new")
+            require(default_context["assumptions"] == [], "scaffold invented assumptions")
+            require(default_context["referrals"] == [], "scaffold invented specialist referrals")
 
             invalid_prefix_out = base / "invalid-prefix"
             proc = run_scaffold(invalid_prefix_out, "--item-prefix", "OMP-MOB")

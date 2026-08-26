@@ -24,21 +24,25 @@
    "note": "The immutable registry is the source of what to fix and how success is checked. Item IDs and identity keys are never reassigned or dropped."
   },
   "context.json": {
-   "current_schema": "1.1",
+   "current_schema": "1.2",
    "legacy_schemas_readable": [
-    "1.0"
+    "1.0",
+    "1.1"
    ],
    "reads": [
     "product_frame",
     "tasks",
     "capabilities",
+    "routing",
+    "assumptions",
+    "referrals",
     "scores",
     "work_orders",
     "evidence_assets",
     "visual_evidence",
     "checks_not_run"
    ],
-   "note": "work_orders carry Scruffy's repair dependency order. product_frame is the product truth the repair must preserve."
+   "note": "work_orders carry Scruffy's repair dependency order. product_frame is the product truth the repair must preserve. routing, assumptions, and referrals constrain scope but do not create approved repair items. Current context 1.2 must pass the parent Scruffy canonical validator before planning; a repeat revision supplies the prior findings.json and context.json explicitly through --baseline-bundle so canonical continuity validation can run."
   },
   "decisions.json": {
    "current_schema": "2.1",

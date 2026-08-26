@@ -117,7 +117,11 @@ def handoff_to_markdown(handoff: dict) -> str:
 
 def _cmd(args) -> int:
     interop = load_interop()
-    bundle = load_bundle(args.bundle, interop)
+    bundle = load_bundle(
+        args.bundle,
+        interop,
+        baseline_source=args.baseline_bundle,
+    )
     plan = build_plan(bundle, interop, args.authorized)
     work = json.loads(Path(args.work).read_text(encoding="utf-8")) if args.work else {}
     if args.augmentations and args.augmentations.startswith("@"):
@@ -135,6 +139,10 @@ def _cmd(args) -> int:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Scruffy repair re-audit handoff")
     parser.add_argument("bundle", help="Path to the Scruffy audit bundle directory")
+    parser.add_argument(
+        "--baseline-bundle",
+        help="prior Scruffy bundle directory required by a repeat context-1.2 audit",
+    )
     parser.add_argument("--work", help="JSON file: item_id -> changed surfaces + self-check")
     parser.add_argument("--augmentations",
                         help='JSON string, or @file from mop_preflight --handoff-augmentations')

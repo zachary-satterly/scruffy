@@ -45,6 +45,7 @@ CATEGORIES = [
     "product", "information_architecture", "interaction", "accessibility",
     "visual", "copy", "backend_shape", "performance",
 ]
+REVIEW_LANES = AUDIT_CONTRACT["context"]["review_lanes"]
 
 
 def screenshot_extension(path: Path) -> str | None:
@@ -184,9 +185,11 @@ def build(
         },
     }
     context = {
-        "schema_version": "1.1",
+        "schema_version": AUDIT_CONTRACT["context"]["schema_version"],
         "audit_id": audit_id,
         "revision_id": rev,
+        "baseline_revision_id": None,
+        "scruffy_applicability": "applicable",
         "title": title,
         "outcome": {
             "label": "TODO: one-line outcome",
@@ -219,6 +222,27 @@ def build(
             }
             for key in CAPABILITY_KEYS
         ],
+        "routing": [
+            {
+                "id": f"ROUTE-{row['key'].replace('_', '-').upper()}",
+                "lane": row["key"],
+                "disposition": "selected" if row["key"] == "core_interface" else "not_applicable",
+                "reason": (
+                    "TODO: describe why the core interface lane is required for this Scruffy audit."
+                    if row["key"] == "core_interface"
+                    else "TODO: record why this lane is not applicable, rejected, or referred."
+                ),
+                "evidence_refs": [seed_evidence_id] if row["key"] == "core_interface" else [],
+                "referral_ids": [],
+                "first_seen_revision": rev,
+                "last_observed_revision": rev,
+                "revision_disposition": "new",
+                "disposition_reason": "Baseline routing decision.",
+            }
+            for row in REVIEW_LANES
+        ],
+        "assumptions": [],
+        "referrals": [],
         "scores": [
             {"category": category, "score": 1, "evidence": "TODO: evidence for this category's score.", "evidence_refs": [seed_evidence_id]}
             for category in CATEGORIES

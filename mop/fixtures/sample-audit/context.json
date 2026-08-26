@@ -1,7 +1,9 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "audit_id": "acme-billing",
   "revision_id": "r1",
+  "baseline_revision_id": null,
+  "scruffy_applicability": "applicable",
   "title": "Acme billing page audit",
   "outcome": {"label": "Sound with material gaps", "summary": "Trustworthy structure once billing state is unified and the status pill is legible.", "confidence": "high"},
   "product_frame": [
@@ -13,7 +15,9 @@
     {"key": "success_signal", "answer": "A past-due invoice becomes paid without support contact.", "basis": "observed"}
   ],
   "tasks": [
-    {"id": "T1", "goal": "Resolve a past-due invoice", "result": "Retry gives no feedback; user is unsure whether a charge occurred.", "status": "fail", "evidence_refs": ["EV-TASK"]}
+    {"id": "T1", "goal": "Resolve a past-due invoice", "result": "Retry gives no feedback; user is unsure whether a charge occurred.", "status": "fail", "evidence_refs": ["EV-TASK"]},
+    {"id": "T2", "goal": "Compare plan differences before changing plans", "result": "The plans repeat one benefit sentence and remain difficult to distinguish.", "status": "partial", "evidence_refs": ["EV-COPY"]},
+    {"id": "T3", "goal": "Return later and confirm the current billing state", "result": "The fixture preserves the billing route but does not exercise persistence.", "status": "not_run", "evidence_refs": ["EV-TASK"]}
   ],
   "capabilities": [
     {"key": "source_read", "status": "available", "scope": "Full repository."},
@@ -26,24 +30,40 @@
     {"key": "copy_context", "status": "available", "scope": "Plan marketing copy."},
     {"key": "design_reference_search", "status": "unavailable", "scope": "No connector."}
   ],
+  "routing": [
+    {"id": "ROUTE-CORE-INTERFACE", "lane": "core_interface", "disposition": "selected", "reason": "The bundle comes from an interface audit.", "evidence_refs": ["EV-TASK"], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."},
+    {"id": "ROUTE-SERVICE-JOURNEY", "lane": "service_journey", "disposition": "not_applicable", "reason": "No cross-channel service claim was included in this fixture.", "evidence_refs": [], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."},
+    {"id": "ROUTE-MEDIA-INGESTION", "lane": "media_ingestion", "disposition": "not_applicable", "reason": "The billing fixture does not ingest media.", "evidence_refs": [], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."},
+    {"id": "ROUTE-SHARED-OUTPUT", "lane": "shared_output", "disposition": "not_applicable", "reason": "The billing fixture has no shared or physical output.", "evidence_refs": [], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."},
+    {"id": "ROUTE-API-CONTRACT", "lane": "api_contract", "disposition": "not_applicable", "reason": "No API correctness claim was included in this fixture.", "evidence_refs": [], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."},
+    {"id": "ROUTE-SECURITY", "lane": "security", "disposition": "not_applicable", "reason": "No security claim was included in this fixture.", "evidence_refs": [], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."},
+    {"id": "ROUTE-PRIVACY", "lane": "privacy", "disposition": "not_applicable", "reason": "No privacy claim was included in this fixture.", "evidence_refs": [], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."},
+    {"id": "ROUTE-RELIABILITY", "lane": "reliability", "disposition": "not_applicable", "reason": "No production reliability claim was included in this fixture.", "evidence_refs": [], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."},
+    {"id": "ROUTE-LEGAL-COMPLIANCE", "lane": "legal_compliance", "disposition": "not_applicable", "reason": "No legal sufficiency claim was included in this fixture.", "evidence_refs": [], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."},
+    {"id": "ROUTE-PHYSICAL-TESTING", "lane": "physical_testing", "disposition": "not_applicable", "reason": "No physical acceptance claim was included in this fixture.", "evidence_refs": [], "referral_ids": [], "first_seen_revision": "r1", "last_observed_revision": "r1", "revision_disposition": "new", "disposition_reason": "Baseline routing decision."}
+  ],
+  "assumptions": [],
+  "referrals": [],
   "scores": [
     {"category": "product", "score": 2, "evidence": "Clear job, weak differentiation.", "evidence_refs": ["EV-TASK"]},
+    {"category": "information_architecture", "score": 0, "evidence": "The bounded fixture exposes one direct billing route.", "evidence_refs": ["EV-TASK"]},
     {"category": "backend_shape", "score": 1, "evidence": "Billing state fused to views.", "evidence_refs": ["EV-SRC"]},
     {"category": "accessibility", "score": 1, "evidence": "Critical status fails contrast.", "evidence_refs": ["EV-A11Y"]},
     {"category": "interaction", "score": 1, "evidence": "Retry has no feedback.", "evidence_refs": ["EV-TASK"]},
     {"category": "copy", "score": 1, "evidence": "Interchangeable plan claims.", "evidence_refs": ["EV-COPY"]},
-    {"category": "visual", "score": 2, "evidence": "Arbitrary hero gradient.", "evidence_refs": ["EV-SHOT"]}
+    {"category": "visual", "score": 2, "evidence": "Arbitrary hero gradient.", "evidence_refs": ["EV-SHOT"]},
+    {"category": "performance", "score": "N/A", "evidence": "No performance trace was available for this fixture.", "evidence_refs": ["EV-TASK"]}
   ],
   "work_orders": [],
   "checks_not_run": [
     {"check": "Runtime performance", "reason": "No trace access", "impact": "Performance score is N/A"}
   ],
   "evidence_assets": [
-    {"id": "EV-SRC", "kind": "source", "locator": "src/billing/", "description": "Three divergent total computations", "verification": "observed"},
-    {"id": "EV-A11Y", "kind": "accessibility_observation", "locator": "status pill", "description": "Contrast 2.4:1", "verification": "captured"},
+    {"id": "EV-SRC", "kind": "source", "locator": "https://example.invalid/fixture-source", "description": "Three divergent total computations", "verification": "observed"},
+    {"id": "EV-A11Y", "kind": "accessibility_observation", "locator": "https://example.invalid/status-pill-measurement", "description": "Contrast 2.4:1", "verification": "captured"},
     {"id": "EV-TASK", "kind": "task_observation", "locator": "T1", "description": "Retry flow gives no feedback", "verification": "observed"},
-    {"id": "EV-COPY", "kind": "copy_sample", "locator": "plan cards", "description": "Interchangeable benefit sentence", "verification": "captured"},
-    {"id": "EV-SHOT", "kind": "screenshot", "locator": "hero", "description": "Decorative gradient", "verification": "captured"}
+    {"id": "EV-COPY", "kind": "copy_sample", "locator": "https://example.invalid/plan-cards", "description": "Interchangeable benefit sentence", "verification": "captured"},
+    {"id": "EV-SHOT", "kind": "screenshot", "locator": "https://example.invalid/hero-capture.png", "description": "Decorative gradient", "verification": "captured"}
   ],
   "visual_evidence": [
     {
@@ -53,6 +73,14 @@
       "look_at": "The gradient band above the balance-due figure.",
       "connection": "The decorative gradient competes with the primary figure described by AS-03.",
       "annotation": {"status": "provided", "reason": "The hero band is the smallest region that shows the competing decoration.", "regions": [{"x": 0, "y": 0, "width": 100, "height": 30, "label": "Decorative gradient band"}]}
+    },
+    {
+      "evidence_id": "EV-SHOT",
+      "item_id": "AS-06",
+      "state": "Billing hero at desktop width with the only available light theme.",
+      "look_at": "The whole captured billing surface has no low-light theme control.",
+      "connection": "The complete light-only surface supports the optional low-light enhancement.",
+      "annotation": {"status": "not_needed", "reason": "The absence applies to the entire captured interface rather than one visual region.", "regions": []}
     }
   ]
 }

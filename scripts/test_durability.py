@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import subprocess
 import sys
@@ -67,6 +68,113 @@ def main() -> int:
         broken_dashboard = temp / "dashboard-broken.html"
         markdown = temp / "audit.md"
         broken_markdown = temp / "audit-broken.md"
+
+        # Context 1.2 continuity is independent of registry continuity. A
+        # repeat audit must provide the prior context and preserve every durable
+        # routing, assumption, and referral ID with an accurate revision state.
+        from test_audit_contract import build_fixture
+
+        baseline_registry, baseline_context = build_fixture(temp)
+        current_registry = copy.deepcopy(baseline_registry)
+        current_registry["revision_id"] = "r2"
+        current_registry["baseline_revision_id"] = "r1"
+        current_registry["items"][0]["last_observed_revision"] = "r2"
+        current_registry["items"][0]["revision_disposition"] = "carried"
+        current_registry["items"][0]["disposition_reason"] = "Reproduced in revision two."
+        current_context = copy.deepcopy(baseline_context)
+        current_context["revision_id"] = "r2"
+        current_context["baseline_revision_id"] = "r1"
+        for ledger_name in ("routing", "assumptions", "referrals"):
+            for row in current_context[ledger_name]:
+                row["last_observed_revision"] = "r2"
+                row["revision_disposition"] = "carried"
+                row["disposition_reason"] = "Reviewed and unchanged in revision two."
+
+        baseline_registry_path = temp / "context-baseline-findings.json"
+        baseline_context_path = temp / "context-baseline.json"
+        current_registry_path = temp / "context-current-findings.json"
+        current_context_path = temp / "context-current.json"
+        baseline_registry_path.write_text(json.dumps(baseline_registry), encoding="utf-8")
+        baseline_context_path.write_text(json.dumps(baseline_context), encoding="utf-8")
+        current_registry_path.write_text(json.dumps(current_registry), encoding="utf-8")
+        current_context_path.write_text(json.dumps(current_context), encoding="utf-8")
+        run(
+            validator,
+            str(current_registry_path),
+            "--context",
+            str(current_context_path),
+            "--baseline",
+            str(baseline_registry_path),
+            "--baseline-context",
+            str(baseline_context_path),
+            contains="context ledger continuity",
+        )
+        run(
+            validator,
+            str(current_registry_path),
+            "--context",
+            str(current_context_path),
+            "--baseline",
+            str(baseline_registry_path),
+            succeeds=False,
+            contains="require --baseline-context",
+        )
+
+        dropped_context = copy.deepcopy(current_context)
+        dropped_context["assumptions"] = []
+        dropped_context_path = temp / "context-dropped.json"
+        dropped_context_path.write_text(json.dumps(dropped_context), encoding="utf-8")
+        run(
+            validator,
+            str(current_registry_path),
+            "--context",
+            str(dropped_context_path),
+            "--baseline",
+            str(baseline_registry_path),
+            "--baseline-context",
+            str(baseline_context_path),
+            succeeds=False,
+            contains="silently dropped baseline IDs",
+        )
+
+        inaccurate_context = copy.deepcopy(current_context)
+        inaccurate_context["assumptions"][0]["status"] = "supported"
+        inaccurate_context_path = temp / "context-inaccurate-disposition.json"
+        inaccurate_context_path.write_text(json.dumps(inaccurate_context), encoding="utf-8")
+        run(
+            validator,
+            str(current_registry_path),
+            "--context",
+            str(inaccurate_context_path),
+            "--baseline",
+            str(baseline_registry_path),
+            "--baseline-context",
+            str(baseline_context_path),
+            succeeds=False,
+            contains="must use revision_disposition updated",
+        )
+
+        reissued_context = copy.deepcopy(current_context)
+        reissued = copy.deepcopy(reissued_context["assumptions"][0])
+        reissued["id"] = "ASM-AUDIENCE-2"
+        reissued["first_seen_revision"] = "r2"
+        reissued["revision_disposition"] = "new"
+        reissued["disposition_reason"] = "Incorrectly reissued stable proposition."
+        reissued_context["assumptions"] = [reissued]
+        reissued_context_path = temp / "context-reissued.json"
+        reissued_context_path.write_text(json.dumps(reissued_context), encoding="utf-8")
+        run(
+            validator,
+            str(current_registry_path),
+            "--context",
+            str(reissued_context_path),
+            "--baseline",
+            str(baseline_registry_path),
+            "--baseline-context",
+            str(baseline_context_path),
+            succeeds=False,
+            contains="reissues baseline assumption proposition",
+        )
 
         run(
             "scripts/migrate_decisions.py",

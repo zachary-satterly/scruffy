@@ -14,6 +14,7 @@ from report_contract import (
     PRODUCT_BASIS_LABELS,
     QUESTION_LABELS,
     TASK_STATUS_LABELS,
+    assumption_rows,
     disposition_label,
     evidence_by_id,
     facet_labels,
@@ -21,6 +22,8 @@ from report_contract import (
     item_label_map,
     plain_category_label,
     public_evidence_summary,
+    referral_rows,
+    routing_rows,
     score_display,
     severity_label,
     status_label,
@@ -172,6 +175,18 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
         ]
         for row in context.get("capabilities", [])
     ]
+    route_table_rows = [
+        [humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in row]
+        for row in routing_rows(context)
+    ]
+    assumption_table_rows = [
+        [humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in row]
+        for row in assumption_rows(context)
+    ]
+    referral_table_rows = [
+        [humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in row]
+        for row in referral_rows(context)
+    ]
     score_table_rows = [
         [
             plain_category_label(row.get("category", "")),
@@ -239,6 +254,21 @@ Confidence: {clean(str(outcome.get('confidence', 'unknown')).title())}
 ## What we could and could not test
 
 {table(['Test area', 'Status', 'What was covered'], capability_table_rows)}
+
+<!-- anti-slop-section:routing -->
+## Review routing
+
+{table(['Review area', 'Decision', 'Reason'], route_table_rows) if route_table_rows else 'No routing ledger is present in this legacy context.'}
+
+<!-- anti-slop-section:assumptions -->
+## Assumptions that could change the result
+
+{table(['Assumption', 'Status', 'Basis', 'Risk if wrong', 'Evidence needed', 'Decision affected'], assumption_table_rows) if assumption_table_rows else 'No consequential assumptions recorded.'}
+
+<!-- anti-slop-section:referrals -->
+## Specialist referrals
+
+{table(['Review area', 'Question', 'Status', 'Why it was referred', 'Claim boundary', 'Supporting records', 'Verified specialist result'], referral_table_rows) if referral_table_rows else 'No specialist referrals recorded.'}
 
 <!-- anti-slop-section:score -->
 ## Quality scores and result

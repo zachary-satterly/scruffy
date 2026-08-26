@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import copy
 import json
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from mop_bundle import (
@@ -29,9 +31,48 @@ def _bundle():
     return load_bundle(FIXTURE, INTEROP)
 
 
+def _write_json(path: Path, document: dict) -> None:
+    path.write_text(json.dumps(document, indent=1) + "\n", encoding="utf-8")
+
+
+def _repeat_bundle(directory: Path) -> Path:
+    """Derive a legitimate r2 bundle from the shipped canonical r1 fixture."""
+    current = directory / "current"
+    shutil.copytree(FIXTURE, current)
+
+    findings_path = current / "findings.json"
+    findings = json.loads(findings_path.read_text(encoding="utf-8"))
+    findings["revision_id"] = "r2"
+    findings["baseline_revision_id"] = "r1"
+    for item in findings["items"]:
+        item["last_observed_revision"] = "r2"
+        item["revision_disposition"] = "carried"
+        item["disposition_reason"] = "Unchanged from the validated r1 baseline."
+    _write_json(findings_path, findings)
+
+    context_path = current / "context.json"
+    context = json.loads(context_path.read_text(encoding="utf-8"))
+    context["revision_id"] = "r2"
+    context["baseline_revision_id"] = "r1"
+    for ledger_name in ("routing", "assumptions", "referrals"):
+        for row in context[ledger_name]:
+            row["last_observed_revision"] = "r2"
+            row["revision_disposition"] = "carried"
+            row["disposition_reason"] = "Unchanged from the validated r1 baseline."
+    _write_json(context_path, context)
+
+    decisions_path = current / "decisions.json"
+    decisions = json.loads(decisions_path.read_text(encoding="utf-8"))
+    decisions["revision_id"] = "r2"
+    decisions["baseline_revision_id"] = "r1"
+    _write_json(decisions_path, decisions)
+    return current
+
+
 def test_load_and_validate_fixture():
     b = _bundle()
     assert b["findings"]["audit_id"] == "acme-billing"
+    assert b["context"]["schema_version"] == "1.2"
     assert b["tokens"] is not None, "optional tokens.json should load when present"
 
 
@@ -65,6 +106,85 @@ def test_legacy_schema_is_readable_with_note():
     b["findings"]["schema_version"] = "2.0"  # legacy, readable
     notes = validate_versions(b, INTEROP)
     assert any("legacy" in n for n in notes), "legacy schema should produce a note"
+
+
+def test_context_1_1_remains_readable_with_note():
+    from mop_bundle import validate_versions
+    b = copy.deepcopy(_bundle())
+    b["context"]["schema_version"] = "1.1"
+    notes = validate_versions(b, INTEROP)
+    assert any("context.json is legacy schema 1.1" in n for n in notes), notes
+
+
+def test_malformed_context_1_2_fails_scruffy_canonical_validation():
+    with tempfile.TemporaryDirectory(prefix="scruffy-mop-context-") as directory:
+        copied = Path(directory) / "bundle"
+        shutil.copytree(FIXTURE, copied)
+        context_path = copied / "context.json"
+        context = json.loads(context_path.read_text(encoding="utf-8"))
+        context["routing"].pop()
+        context_path.write_text(json.dumps(context), encoding="utf-8")
+        try:
+            load_bundle(copied, INTEROP)
+        except InteropError as exc:
+            assert "canonical context-1.2 validation" in str(exc), exc
+            assert "routing must cover exactly" in str(exc), exc
+            return
+    raise AssertionError("Mop accepted a malformed current Scruffy context")
+
+
+def test_repeat_context_1_2_load_check_and_plan_accept_r1_baseline():
+    import subprocess
+
+    with tempfile.TemporaryDirectory(prefix="scruffy-mop-repeat-") as directory:
+        current = _repeat_bundle(Path(directory))
+        bundle = load_bundle(current, INTEROP, baseline_source=FIXTURE)
+        assert bundle["findings"]["revision_id"] == "r2"
+        assert bundle["context"]["baseline_revision_id"] == "r1"
+
+        script = REPO / "scripts" / "mop_bundle.py"
+        for command in ("check", "plan"):
+            argv = [
+                sys.executable,
+                str(script),
+                command,
+                str(current),
+                "--baseline-bundle",
+                str(FIXTURE),
+            ]
+            if command == "plan":
+                argv.append("--json")
+            result = subprocess.run(argv, text=True, capture_output=True, check=False)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert "r2" in result.stdout, result.stdout
+
+
+def test_repeat_context_1_2_without_baseline_fails_closed():
+    with tempfile.TemporaryDirectory(prefix="scruffy-mop-repeat-") as directory:
+        current = _repeat_bundle(Path(directory))
+        try:
+            load_bundle(current, INTEROP)
+        except InteropError as exc:
+            assert "repeat context-1.2 bundle requires" in str(exc), exc
+            assert "--baseline-bundle" in str(exc), exc
+            return
+    raise AssertionError("Mop accepted a repeat context-1.2 bundle without its baseline")
+
+
+def test_repeat_context_1_2_malformed_with_baseline_still_fails_closed():
+    with tempfile.TemporaryDirectory(prefix="scruffy-mop-repeat-") as directory:
+        current = _repeat_bundle(Path(directory))
+        context_path = current / "context.json"
+        context = json.loads(context_path.read_text(encoding="utf-8"))
+        context["routing"].pop()
+        _write_json(context_path, context)
+        try:
+            load_bundle(current, INTEROP, baseline_source=FIXTURE)
+        except InteropError as exc:
+            assert "canonical context-1.2 validation" in str(exc), exc
+            assert "routing must cover exactly" in str(exc), exc
+            return
+    raise AssertionError("Mop accepted a malformed repeat context with a baseline")
 
 
 def test_missing_required_artifact_fails():

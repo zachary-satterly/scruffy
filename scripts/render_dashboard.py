@@ -28,6 +28,9 @@ from report_contract import (
     PRODUCT_BASIS_LABELS,
     QUESTION_LABELS,
     TASK_STATUS_LABELS,
+    assumption_rows,
+    referral_rows,
+    routing_rows,
 )
 
 
@@ -373,6 +376,30 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
         ]
         for row in context.get("capabilities", [])
     ]
+    route_table_rows = [
+        [humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in row]
+        for row in routing_rows(context)
+    ]
+    assumption_table_rows = [
+        [humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in row]
+        for row in assumption_rows(context)
+    ]
+    referral_table_rows = [
+        [humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in row]
+        for row in referral_rows(context)
+    ]
+    routing_html = (
+        table_html(["Review area", "Decision", "Reason"], route_table_rows)
+        if route_table_rows else '<p class="quiet">No routing ledger is present in this legacy context.</p>'
+    )
+    assumptions_html = (
+        table_html(["Assumption", "Status", "Basis", "Risk if wrong", "Evidence needed", "Decision affected"], assumption_table_rows)
+        if assumption_table_rows else '<p class="quiet">No consequential assumptions recorded.</p>'
+    )
+    referrals_html = (
+        table_html(["Review area", "Question", "Status", "Why it was referred", "Claim boundary", "Supporting records", "Verified specialist result"], referral_table_rows)
+        if referral_table_rows else '<p class="quiet">No specialist referrals recorded.</p>'
+    )
     score_source = sorted(
         context.get("scores", []),
         key=lambda row: (0, -row.get("score")) if isinstance(row.get("score"), int) else (1, 0),
@@ -593,6 +620,9 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
     <section id="task-ledger"><h2>Did real journeys work?</h2><p class="section-note">Each row shows a task we performed, what happened, and the supporting records.</p>{table_html(['Journey','Outcome','Goal','What happened','Supporting records'],task_table_rows)}</section>
     {additional_visual_evidence}
     <section id="capability-ledger"><h2>What we could and could not test</h2><p class="section-note">{esc(capability_summary)}. Anything not tested includes the reason and what that limits.</p>{table_html(['Test area','Status','What was covered'],capability_table_rows)}</section>
+    <section id="routing"><h2>Review routing</h2><p class="section-note">Every review area is accounted for, including areas excluded or referred to specialists.</p>{routing_html}</section>
+    <section id="assumptions"><h2>Assumptions that could change the result</h2>{assumptions_html}</section>
+    <section id="referrals"><h2>Specialist referrals</h2>{referrals_html}</section>
     <section id="score"><h2>Quality scores, highest concern first</h2><p class="section-note">Zero means clear; three means a major problem. “Not scored” means the review did not have enough evidence.</p>{table_html(['Area','Result','Why'],score_table_rows)}</section>
     <section id="findings"><h2>Findings</h2><div class="toolbar" aria-label="Review controls"><button data-filter="all" class="primary">All open items</button><button data-filter="open">Open</button><button data-filter="needs-verification">Needs more evidence</button><button id="download-findings">Download full audit data</button><button id="download-decisions">Download decisions</button><button id="copy-decisions">Copy decisions</button><label>Import decisions<input id="import-decisions" type="file" accept="application/json"></label></div><p id="ui-status" class="status" aria-live="polite"></p>{section_items('Address first','The highest-priority findings are shown first; all findings remain available below.',prioritized_findings,decision_map,context,context_path.parent,item_labels)}{section_items('Other active findings','Confirmed findings and items that still need more evidence.',additional_findings,decision_map,context,context_path.parent,item_labels)}</section>
     <section id="enhancements"><h2>Optional enhancements</h2>{enhancement_html}</section>

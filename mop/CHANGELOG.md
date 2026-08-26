@@ -10,8 +10,14 @@ for re-audit. Not yet exercised against a real-world audit outside the fixture.
 ### Added
 - Product record (`PRODUCT.md`) via Impeccable init.
 - Consumer interop contract against Scruffy's output schema
-  (`schema/interop.json`): registry 2.1, context 1.1, decisions 2.1, tokens 1.0,
-  plus the work-order lane / ordering model.
+  (`schema/interop.json`): registry 2.1, context 1.2 (1.0 and 1.1 read-only),
+  decisions 2.1, tokens 1.0, plus the work-order lane / ordering model.
+- Canonical context-1.2 validation through Scruffy's parent validator, including
+  explicit `--baseline-bundle <prior-bundle-dir>` support for repeat revisions.
+  Mop forwards the prior `findings.json` and `context.json` for registry and
+  routing/assumption/referral continuity; a missing or malformed baseline fails
+  closed. The r2/r1 fixture regression covers library load, CLI check, and CLI
+  plan while retaining malformed-repeat rejection.
 - Runtime method: `SKILL.md` routing into `references/method.md`,
   `fix-protocols.md` (per-category protocols for all eight Scruffy categories),
   `craft-bar.md`, `verification.md`, and `scruffy-handoff.md`.

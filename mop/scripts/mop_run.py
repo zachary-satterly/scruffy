@@ -25,6 +25,10 @@ from mop_preflight import build_preflight, to_handoff_augmentations
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bundle", help="Scruffy audit bundle directory")
+    parser.add_argument(
+        "--baseline-bundle",
+        help="prior Scruffy bundle directory required by a repeat context-1.2 audit",
+    )
     parser.add_argument("--templates", help="reference/template image dir (Mobbin exports, taste library)")
     parser.add_argument("--assets", help="assets manifest JSON (screenshots with captions and item_ids, references, preflight)")
     parser.add_argument("--impeccable", choices=("available", "absent", "not_run"), default=None)
@@ -37,7 +41,11 @@ def main(argv=None) -> int:
 
     bundle_dir = Path(args.bundle)
     interop = load_interop()
-    bundle = load_bundle(bundle_dir, interop)
+    bundle = load_bundle(
+        bundle_dir,
+        interop,
+        baseline_source=args.baseline_bundle,
+    )
     plan = build_plan(bundle, interop, args.authorized)
 
     # 1. Preflight — always disclosed, never assumed.
@@ -69,7 +77,13 @@ def main(argv=None) -> int:
 
     # 3. Dashboard — the decision surface is always rendered.
     out = args.out or str(bundle_dir / "mop-dashboard.html")
-    render(bundle_dir, args.assets, out, authorized=args.authorized)
+    render(
+        bundle_dir,
+        args.assets,
+        out,
+        authorized=args.authorized,
+        baseline_source=args.baseline_bundle,
+    )
 
     gate = plan["gate"]
     print("Scruffy repair session prepared")

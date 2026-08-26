@@ -22,6 +22,7 @@
    "id": "AS-04",
    "identity_key": "billing-state-fused-to-view",
    "kind": "finding",
+   "plain": "Three billing surfaces calculate the same invoice differently, so customers can receive conflicting totals.",
    "title": "[FIXTURE] Billing state is computed inside the view",
    "category": "backend_shape",
    "facets": [],
@@ -54,6 +55,7 @@
    "id": "AS-02",
    "identity_key": "contrast-fails-on-status-pill",
    "kind": "finding",
+   "plain": "The past-due label is too faint to read reliably even though it carries the page's most important state.",
    "title": "[FIXTURE] Payment-status pill fails contrast",
    "category": "accessibility",
    "facets": [],
@@ -63,7 +65,7 @@
    "revision_disposition": "new",
    "first_seen_revision": "r1",
    "last_observed_revision": "r1",
-   "observation": "The 'Past due' pill renders #b9895f on #f2efe9 at 2.4:1.",
+   "observation": "The 'Past due' pill renders #b9895f on #f2efe9 at 2.4:1, below WCAG 1.4.3.",
    "user_impact": "Low-vision users cannot read the single most important billing state.",
    "evidence": [
     "Measured contrast ratio 2.4:1 on the status pill"
@@ -88,6 +90,7 @@
    "id": "AS-05",
    "identity_key": "retry-payment-no-feedback",
    "kind": "finding",
+   "plain": "Retrying a payment produces no pending, success, or failure feedback, leaving customers unsure whether anything happened.",
    "title": "[FIXTURE] Retry-payment button gives no feedback",
    "category": "interaction",
    "facets": [
@@ -124,13 +127,14 @@
    "id": "AS-01",
    "identity_key": "portable-plan-claims",
    "kind": "finding",
+   "plain": "Every plan uses the same vague benefit sentence, so customers cannot tell what changes with price.",
    "title": "[FIXTURE] Plan descriptions are interchangeable filler",
    "category": "copy",
    "facets": [
     "trust_integrity"
    ],
    "severity": "medium",
-   "confidence": "medium",
+   "confidence": "moderate",
    "status": "open",
    "revision_disposition": "new",
    "first_seen_revision": "r1",
@@ -154,13 +158,11 @@
    "destination_id": null,
    "editorial_review": {
     "review_type": "claims_provenance",
-    "sample_adequacy": "adequate",
-    "analysis_language_scope": "en",
-    "language_review_basis": "verified_english_analyzer",
-    "analyzer_evidence_ref": "EV-COPY",
-    "independent_signal_families": [
-     "specificity"
-    ],
+    "sample_adequacy": "not_applicable",
+    "analysis_language_scope": "not_applicable",
+    "language_review_basis": "not_applicable",
+    "analyzer_evidence_ref": null,
+    "independent_signal_families": [],
     "manual_checks": [
      {
       "code": "terminology_and_information_sequence",
@@ -196,11 +198,12 @@
    "id": "AS-03",
    "identity_key": "hero-gradient-arbitrary",
    "kind": "finding",
+   "plain": "A decorative gradient competes with the balance due, weakening the hierarchy of the billing page.",
    "title": "[FIXTURE] Arbitrary hero gradient weakens hierarchy",
    "category": "visual",
    "facets": [],
    "severity": "low",
-   "confidence": "medium",
+   "confidence": "moderate",
    "status": "open",
    "revision_disposition": "new",
    "first_seen_revision": "r1",
@@ -227,6 +230,7 @@
    "id": "AS-06",
    "identity_key": "add-dark-mode",
    "kind": "enhancement",
+   "plain": "Customers in dark environments could benefit from an optional low-light theme after the approved repairs are complete.",
    "title": "[FIXTURE] Offer a dark theme",
    "category": "visual",
    "facets": [],
@@ -256,15 +260,17 @@
   }
  ],
  "presentation": {
-  "prioritized": [
+  "prioritized_finding_ids": [
    "AS-04",
    "AS-02",
    "AS-05",
    "AS-01",
    "AS-03"
   ],
-  "enhancements": [
+  "prioritized_enhancement_ids": [
    "AS-06"
-  ]
+  ],
+  "strength_ids": [],
+  "cleared_ids": []
  }
 }

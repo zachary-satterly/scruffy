@@ -20,7 +20,7 @@ Every repair session starts with the orchestrator and renders the decision surfa
 before any implementation:
 
 ```
-python3 scripts/mop_run.py <bundle> [--templates <reference-image-dir>] [--authorized]
+python3 scripts/mop_run.py <bundle> [--baseline-bundle <prior-bundle>] [--templates <reference-image-dir>] [--authorized]
 ```
 
 This always produces, in order: `mop-preflight.json` (capabilities probed and
@@ -45,6 +45,16 @@ an image anchor cannot be selected, and text-only design advice fails closed.
   re-audit clears a finding.
 - **Preserve product truth.** Everything in Scruffy's `product_frame` and outside
   the approved scope survives unchanged.
+- **Preserve audit boundaries.** Read context routing, assumptions, and referrals,
+  but never implement a referral as though it were an approved Scruffy finding.
+  Only an approved registry item enters the repair plan.
+- **Validate current context canonically.** A context-1.2 bundle is usable only
+  after Scruffy's parent `validate_audit.py` accepts its exact findings, context,
+  and decisions artifacts. A repeat revision must also pass the prior bundle's
+  `findings.json` and `context.json` through `--baseline-bundle`; Mop forwards
+  them to that same validator for registry and ledger continuity. If the
+  canonical validator or required baseline is absent, or validation rejects the
+  bundle, stop; never substitute a Mop-owned interpretation of the schema.
 
 ## Load order
 
@@ -73,8 +83,8 @@ never a defect.
 ## The loop, in one screen
 
 ```sh
-python3 scripts/mop_bundle.py check <bundle-dir>              # ingest, validate, gate (fail closed)
-python3 scripts/mop_bundle.py plan  <bundle-dir> --authorized # dependency-ordered plan of approved items
+python3 scripts/mop_bundle.py check <bundle-dir> [--baseline-bundle <prior-bundle>]              # ingest, validate, gate
+python3 scripts/mop_bundle.py plan  <bundle-dir> [--baseline-bundle <prior-bundle>] --authorized # approved-item plan
 python3 scripts/mop_preflight.py --design-reference-search available  # probe capabilities (never assume)
 # implement each step to the craft bar, in order, per fix-protocols.md
 python3 scripts/mop_dashboard.py <bundle-dir> --assets assets.json --out dashboard.html --authorized  # self-contained deliverable

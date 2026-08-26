@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zachary-satterly/scruffy/evals/review-routing/session-receipt.schema.json",
+  "title": "Scruffy review-routing isolated-session receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "manifest_sha256",
+    "run_id",
+    "trial_id",
+    "trial_nonce",
+    "session_id",
+    "model_identity",
+    "prompt_sha256",
+    "result_sha256",
+    "attestor",
+    "isolation_attestation",
+    "instruction_execution_attestation"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "trial_id": {"type": "string", "minLength": 1},
+    "trial_nonce": {"type": "string", "minLength": 16},
+    "session_id": {"type": "string", "minLength": 1},
+    "model_identity": {
+      "type": "object",
+      "required": ["provider", "model", "runtime", "runtime_version"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "runtime": {"type": "string", "minLength": 1},
+        "runtime_version": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "prompt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "result_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "attestor": {"type": "string", "minLength": 1},
+    "isolation_attestation": {"$ref": "#/$defs/isolation_attestation"},
+    "instruction_execution_attestation": {"$ref": "#/$defs/execution_attestation"}
+  },
+  "$defs": {
+    "isolation_attestation": {
+      "type": "object",
+      "required": ["status", "method", "evidence_ref"],
+      "properties": {
+        "status": {"enum": ["verified", "unproved"]},
+        "method": {"enum": ["constrained_runtime", "tool_event_log", "self_report", "none"]},
+        "evidence_ref": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "execution_attestation": {
+      "type": "object",
+      "required": ["status", "method", "evidence_ref"],
+      "properties": {
+        "status": {"enum": ["not_executed", "executed", "unproved"]},
+        "method": {"enum": ["constrained_runtime", "tool_event_log", "self_report", "none"]},
+        "evidence_ref": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

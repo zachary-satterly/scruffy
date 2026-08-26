@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -55,21 +56,50 @@ def _read_json(path: Path) -> dict:
         raise InteropError(f"{path.name} is not valid JSON: {exc}") from exc
 
 
-def load_bundle(source, interop: dict | None = None) -> dict:
+def _paths_for_source(source, *, label: str) -> dict[str, Path]:
+    """Resolve a bundle directory or explicit artifact-path mapping."""
+    if isinstance(source, dict):
+        return {name: Path(path) for name, path in source.items()}
+    base = Path(source)
+    if not base.is_dir():
+        raise InteropError(f"{label} path is not a directory: {base}")
+    return {name: base / name for name in ARTIFACTS}
+
+
+def _baseline_paths(source) -> dict[str, Path] | None:
+    """Resolve the canonical baseline pair required for context-1.2 continuity."""
+    if source is None:
+        return None
+    paths = _paths_for_source(source, label="Baseline bundle")
+    for required in ("findings.json", "context.json"):
+        path = paths.get(required)
+        if path is None or not path.is_file():
+            raise InteropError(
+                f"Baseline bundle is missing required artifact: {required}"
+            )
+    return paths
+
+
+def load_bundle(
+    source,
+    interop: dict | None = None,
+    *,
+    baseline_source=None,
+) -> dict:
     """Load a Scruffy audit bundle from a directory (or a dict of paths).
 
     Returns a dict with keys ``findings``, ``context``, ``decisions`` and, when
     present, ``tokens``. ``tokens.json`` is optional; the other three are
     required. Schema versions are validated against the interop contract.
+
+    A repeat context-1.2 audit must also supply the prior Scruffy bundle through
+    ``baseline_source``. Mop passes that bundle's ``findings.json`` and
+    ``context.json`` to Scruffy's canonical validator; it does not interpret or
+    copy the parent schema.
     """
     interop = interop or load_interop()
-    if isinstance(source, dict):
-        paths = {name: Path(p) for name, p in source.items()}
-    else:
-        base = Path(source)
-        if not base.is_dir():
-            raise InteropError(f"Bundle path is not a directory: {base}")
-        paths = {name: base / name for name in ARTIFACTS}
+    paths = _paths_for_source(source, label="Bundle")
+    baseline_paths = _baseline_paths(baseline_source)
 
     bundle: dict = {}
     for required in ("findings.json", "context.json", "decisions.json"):
@@ -85,6 +115,7 @@ def load_bundle(source, interop: dict | None = None) -> dict:
         bundle["tokens"] = None
 
     validate_versions(bundle, interop)
+    _validate_canonical_current_context(bundle, paths, interop, baseline_paths)
     _check_cross_references(bundle)
     return bundle
 
@@ -149,6 +180,64 @@ def validate_versions(bundle: dict, interop: dict) -> list[str]:
             f"do not coerce an unrecognized schema."
         )
     return notes
+
+
+def _validate_canonical_current_context(
+    bundle: dict,
+    paths: dict[str, Path],
+    interop: dict,
+    baseline_paths: dict[str, Path] | None,
+) -> None:
+    """Delegate current-context validation to Scruffy's canonical validator.
+
+    Mop deliberately owns no context schema. Legacy contexts retain their
+    documented read-only compatibility path; the current context must satisfy
+    the exact validator shipped by the parent Scruffy repository.
+    """
+    current_context, _ = _accepted_versions(interop["consumes"]["context.json"])
+    if str(bundle["context"].get("schema_version", "")).strip() != current_context:
+        if baseline_paths is not None:
+            raise InteropError(
+                "--baseline-bundle is only valid for the current context schema; "
+                "legacy contexts retain their read-only compatibility path"
+            )
+        return
+    validator = REPO_ROOT.parent / "scripts" / "validate_audit.py"
+    if not validator.is_file():
+        raise InteropError(
+            "Scruffy canonical context validator is unavailable; disclose the gap and stop"
+        )
+    command = [
+        sys.executable,
+        str(validator),
+        str(paths["findings.json"]),
+        "--context",
+        str(paths["context.json"]),
+        "--decisions",
+        str(paths["decisions.json"]),
+    ]
+    baseline_revision = bundle["context"].get("baseline_revision_id")
+    if baseline_revision is not None and baseline_paths is None:
+        raise InteropError(
+            "repeat context-1.2 bundle requires its prior Scruffy artifacts; "
+            "pass --baseline-bundle <prior-bundle-dir> (or baseline_source to load_bundle)"
+        )
+    if baseline_paths is not None:
+        command.extend(
+            [
+                "--baseline",
+                str(baseline_paths["findings.json"]),
+                "--baseline-context",
+                str(baseline_paths["context.json"]),
+            ]
+        )
+    result = subprocess.run(command, text=True, capture_output=True, check=False)
+    if result.returncode:
+        detail = " ".join((result.stdout + result.stderr).split())
+        raise InteropError(
+            "context.json failed Scruffy's canonical context-1.2 validation: "
+            + (detail or "validator returned no diagnostic")
+        )
 
 
 def _check_cross_references(bundle: dict) -> None:
@@ -425,7 +514,7 @@ def plan_to_markdown(plan: dict) -> str:
 # ---------------------------------------------------------------------------
 def _cmd_check(args) -> int:
     interop = load_interop()
-    bundle = load_bundle(args.bundle, interop)
+    bundle = load_bundle(args.bundle, interop, baseline_source=args.baseline_bundle)
     notes = validate_versions(bundle, interop)
     gate = gate_state(bundle, interop, args.authorized)
     approved = approved_item_ids(bundle)
@@ -442,7 +531,7 @@ def _cmd_check(args) -> int:
 
 def _cmd_plan(args) -> int:
     interop = load_interop()
-    bundle = load_bundle(args.bundle, interop)
+    bundle = load_bundle(args.bundle, interop, baseline_source=args.baseline_bundle)
     plan = build_plan(bundle, interop, args.authorized)
     if args.json:
         print(json.dumps(plan, indent=2))
@@ -457,12 +546,20 @@ def main(argv=None) -> int:
 
     c = sub.add_parser("check", help="Validate a bundle and report the gate state")
     c.add_argument("bundle", help="Path to a directory of Scruffy audit artifacts")
+    c.add_argument(
+        "--baseline-bundle",
+        help="Prior Scruffy bundle directory required by a repeat context-1.2 audit",
+    )
     c.add_argument("--authorized", action="store_true",
                    help="Explicit user grant of Scruffy repair write authority")
     c.set_defaults(func=_cmd_check)
 
     p = sub.add_parser("plan", help="Emit the dependency-ordered plan")
     p.add_argument("bundle", help="Path to a directory of Scruffy audit artifacts")
+    p.add_argument(
+        "--baseline-bundle",
+        help="Prior Scruffy bundle directory required by a repeat context-1.2 audit",
+    )
     p.add_argument("--authorized", action="store_true",
                    help="Explicit user grant of Scruffy repair write authority")
     p.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown")

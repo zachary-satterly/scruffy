@@ -51,8 +51,8 @@ def load_contract(path: Path = MANIFEST) -> dict[str, Any]:
     if len(capability_keys) != 9 or len(capability_keys) != len(set(capability_keys)):
         raise ValueError("audit context repeats a capability key")
     context = data["context"]
-    if context.get("schema_version") != "1.1":
-        raise ValueError("current context schema must be 1.1")
+    if context.get("schema_version") != "1.2":
+        raise ValueError("current context schema must be 1.2")
     legacy_context_schemas = context.get("legacy_schema_versions")
     if (
         not isinstance(legacy_context_schemas, list)
@@ -62,20 +62,65 @@ def load_contract(path: Path = MANIFEST) -> dict[str, Any]:
     ):
         raise ValueError("context.legacy_schema_versions must be a non-empty unique string array")
     for field in (
-        "product_frame_bases", "task_statuses", "capability_statuses", "score_values",
-        "evidence_kinds", "evidence_verification",
+        "product_frame_bases", "task_statuses", "scruffy_applicability_statuses", "capability_statuses", "score_values",
+        "evidence_kinds", "evidence_verification", "lane_dispositions",
+        "assumption_statuses", "assumption_confidence", "referral_review_statuses",
+        "ledger_revision_dispositions", "specialist_review_verification_states",
     ):
         values = context.get(field)
         if not isinstance(values, list) or not values or len(values) != len(set(map(str, values))):
             raise ValueError(f"context.{field} must be a non-empty unique array")
     if "analysis_receipt" not in context["evidence_kinds"]:
         raise ValueError("audit context must define analysis_receipt evidence")
+    if "specialist_review" not in context["evidence_kinds"]:
+        raise ValueError("audit context must define specialist_review evidence")
+    if context["scruffy_applicability_statuses"] != ["applicable", "not_applicable", "uncertain"]:
+        raise ValueError("context.scruffy_applicability_statuses must define applicable, not_applicable, and uncertain")
+    if context["ledger_revision_dispositions"] != ["new", "carried", "updated"]:
+        raise ValueError("context.ledger_revision_dispositions must define new, carried, and updated")
+    if context["specialist_review_verification_states"] != ["verified", "not_verified"]:
+        raise ValueError("context.specialist_review_verification_states must define verified and not_verified")
     annotation_statuses = context.get("visual_annotation_statuses")
     if annotation_statuses != ["provided", "not_needed"]:
         raise ValueError("context.visual_annotation_statuses must define provided and not_needed")
     max_regions = context.get("visual_annotation_max_regions")
     if not isinstance(max_regions, int) or isinstance(max_regions, bool) or max_regions < 1:
         raise ValueError("context.visual_annotation_max_regions must be a positive integer")
+    supported_context_schemas = {context["schema_version"], *legacy_context_schemas}
+    features = context.get("feature_schema_versions")
+    if not isinstance(features, dict) or set(features) != {"visual_evidence", "routing"}:
+        raise ValueError("context.feature_schema_versions must define visual_evidence and routing")
+    for feature, versions in features.items():
+        if (
+            not isinstance(versions, list)
+            or not versions
+            or len(versions) != len(set(versions))
+            or any(value not in supported_context_schemas for value in versions)
+        ):
+            raise ValueError(f"context.feature_schema_versions.{feature} must name supported unique versions")
+    if features["visual_evidence"] != ["1.1", "1.2"]:
+        raise ValueError("visual evidence must remain enforced for context schemas 1.1 and 1.2")
+    if features["routing"] != ["1.2"]:
+        raise ValueError("routing must begin with context schema 1.2")
+    lanes = context.get("review_lanes")
+    required_lane_fields = {"key", "label", "owner", "description"}
+    if not isinstance(lanes, list) or not lanes:
+        raise ValueError("context.review_lanes must be a non-empty array")
+    if any(not isinstance(row, dict) or required_lane_fields - set(row) for row in lanes):
+        raise ValueError("each review lane must define key, label, owner, and description")
+    lane_keys = [row.get("key") for row in lanes]
+    if len(lane_keys) != len(set(lane_keys)) or any(not isinstance(value, str) or not value for value in lane_keys):
+        raise ValueError("context.review_lanes must use unique non-empty string keys")
+    if any(row.get("owner") not in {"scruffy", "specialist"} for row in lanes):
+        raise ValueError("context.review_lanes owner must be scruffy or specialist")
+    if lanes[0].get("key") != "core_interface" or lanes[0].get("owner") != "scruffy":
+        raise ValueError("core_interface must be the first Scruffy-owned review lane")
+    required_specialists = {
+        "api_contract", "security", "privacy", "reliability", "legal_compliance", "physical_testing",
+    }
+    actual_specialists = {row["key"] for row in lanes if row["owner"] == "specialist"}
+    if actual_specialists != required_specialists:
+        raise ValueError("review lanes must define the six canonical specialist referrals")
     editorial = data.get("editorial_review", {})
     if editorial.get("authorship_assessment") != "not_performed":
         raise ValueError("editorial contract must prohibit authorship assessment")
@@ -133,9 +178,28 @@ def render_reference(data: dict[str, Any]) -> str:
             "",
             "## Evidence receipts",
             "",
-            "Schema-2.1 context stores evidence as typed receipts with an immutable ID, kind, locator, description, and verification state. Registry items reference those IDs through `evidence_refs`. A local screenshot or source locator must exist when the validator can resolve it. URLs must use HTTP or HTTPS. A non-empty prose claim is not an evidence receipt.",
+            "Schema-2.1 context stores evidence as typed receipts with an immutable ID, kind, locator, description, and verification state. Registry items reference those IDs through `evidence_refs`. A local screenshot or source locator must exist when the validator can resolve it. URLs must use HTTP or HTTPS. A non-empty prose claim is not an evidence receipt. A `specialist_review` receipt additionally records its discipline, reviewer or authority, scope, result, date or artifact version, and a verified/not-verified state.",
             "",
-            "New audits emit context schema 1.1. Every locally captured screenshot has one claim-specific visual context for each registry item that cites it, or one unlinked context when no item cites it. Each context records the operated state, a precise `look_at` instruction, the connection to the claim, and an annotation decision. `provided` annotations contain one to four percentage-based rectangles with visible labels. `not_needed` requires a reason explaining why the whole frame is the evidence or why an overlay would misrepresent a nonvisual claim. Generic asset descriptions do not satisfy this contract.",
+            "New audits emit context schema 1.2. Every locally captured screenshot has one claim-specific visual context for each registry item that cites it, or one unlinked context when no item cites it. Each context records the operated state, a precise `look_at` instruction, the connection to the claim, and an annotation decision. `provided` annotations contain one to four percentage-based rectangles with visible labels. `not_needed` requires a reason explaining why the whole frame is the evidence or why an overlay would misrepresent a nonvisual claim. Generic asset descriptions do not satisfy this contract.",
+            "",
+            "## Review routing",
+            "",
+            "Context schema 1.2 records `scruffy_applicability` and every canonical review lane exactly once as `selected`, `rejected`, `not_applicable`, or `referred`. `core_interface` is selected when Scruffy is applicable or applicability is uncertain. A non-interface stop-and-refer records `scruffy_applicability: not_applicable`, marks `core_interface` not applicable, selects no Scruffy-owned lane, and emits no interface findings or work orders. Specialist-owned lanes cannot be selected as if Scruffy performed them: they are rejected with a reason, marked not applicable, or linked to a typed referral. A referral records its specialist lane, review status, evidence references, and the claim Scruffy will not make without that specialist evidence. `complete` requires at least one verified, lane-matched `specialist_review` receipt; `not_run` forbids specialist artifacts.",
+            "",
+            "The routing ledger is separate from the eight finding categories. Lane keys never appear in `items[].category`, and specialist results never leak into Scruffy's registry as improvised ninth categories.",
+            "",
+            "Routing, assumptions, and referrals are durable ledgers. Each row carries a stable ID, first-seen and last-observed revisions, and an explicit `new`, `carried`, or `updated` disposition. A context 1.2 revision records `baseline_revision_id` and must be validated with its baseline context; prior rows cannot disappear or be reissued under new IDs.",
+            "",
+            "Assumptions are durable records with an ID, basis, confidence, risk if wrong, evidence needed, affected decision, status, and evidence references. Open assumptions may lack supporting evidence; supported or refuted assumptions may not.",
+            "",
+            "Canonical lanes:",
+            "",
+        ]
+    )
+    for row in data["context"]["review_lanes"]:
+        lines.append(f"- `{row['key']}` — {row['label']} ({row['owner']}): {row['description']}")
+    lines.extend(
+        [
             "",
             "## Editorial review",
             "",
@@ -149,7 +213,7 @@ def render_reference(data: dict[str, Any]) -> str:
             "",
             "## Backward compatibility",
             "",
-            "Schema 2.0 and context schema 1.0 remain readable so published audit history survives. New audits emit registry schema 2.1 with context schema 1.1. A new revision may reconcile an older baseline without rewriting the baseline artifact.",
+            "Schema 2.0 and context schemas 1.0 and 1.1 remain readable so published audit history survives. New audits emit registry schema 2.1 with context schema 1.2. Visual-evidence checks remain active for both context 1.1 and 1.2; routing checks apply only to context 1.2. A new revision may reconcile an older baseline without rewriting it, but it must supply the baseline context to the validator; ledgers introduced after a legacy context are explicitly marked `new`.",
         ]
     )
     return "\n".join(lines) + "\n"

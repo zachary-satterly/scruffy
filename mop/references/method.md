@@ -16,10 +16,17 @@ You need a directory holding a Scruffy audit's output: `findings.json`,
 you a report but not these files, ask for the JSON artifacts — Scruffy repair
 implements against the registry, not against prose.
 
+For a repeat context-1.2 audit (its `baseline_revision_id` is non-null), also
+locate the prior revision's bundle. Pass that directory explicitly with
+`--baseline-bundle <prior-bundle-dir>`. The prior directory must contain its
+canonical `findings.json` and `context.json`; Mop forwards those exact files to
+Scruffy's validator and does not infer a baseline from filenames or copy the
+schema. Missing or mismatched baseline artifacts are a hard stop.
+
 ## 1. Ingest and validate (fail closed)
 
 ```sh
-python3 scripts/mop_bundle.py check <bundle-dir>
+python3 scripts/mop_bundle.py check <bundle-dir> [--baseline-bundle <prior-bundle-dir>]
 ```
 
 This validates every artifact's `schema_version` against the versions Scruffy's
@@ -39,7 +46,7 @@ the gap — never hand-edit the bundle to make it parse.
 ## 3. Build the plan
 
 ```sh
-python3 scripts/mop_bundle.py plan <bundle-dir> [--authorized] [--json]
+python3 scripts/mop_bundle.py plan <bundle-dir> [--baseline-bundle <prior-bundle-dir>] [--authorized] [--json]
 ```
 
 The plan orders approved items by Scruffy's explicit `work_orders` when present,
@@ -72,7 +79,7 @@ Before declaring anything done, run each acceptance check yourself
 ([`verification.md`](verification.md)). Then build the re-audit handoff:
 
 ```sh
-python3 scripts/mop_handoff.py <bundle-dir> --work work.json --authorized
+python3 scripts/mop_handoff.py <bundle-dir> [--baseline-bundle <prior-bundle-dir>] --work work.json --authorized
 ```
 
 The handoff maps each item to the surfaces you changed and your self-assessment.

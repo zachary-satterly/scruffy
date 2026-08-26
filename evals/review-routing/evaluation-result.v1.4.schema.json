@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zachary-satterly/scruffy/evals/review-routing/evaluation-result.v1.4.schema.json",
+  "title": "Scruffy repeated review-routing evaluation result",
+  "type": "object",
+  "required": ["schema_version", "fixture_set", "evidence_class", "evidence_claim", "manifest_sha256", "threshold_set_id", "trial_quality_policy", "required_checks_not_run_policy", "key_version", "model_identity", "trial_results", "aggregate", "passed"],
+  "properties": {
+    "schema_version": {"const": "1.4"},
+    "fixture_set": {"type": "string", "pattern": "^review-routing-[a-z0-9._-]+$"},
+    "evidence_class": {"enum": ["public_development", "private_holdout"]},
+    "evidence_claim": {"type": "string", "minLength": 1},
+    "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "threshold_set_id": {"type": "string"},
+    "trial_quality_policy": {"const": "all_trials_must_pass_non_check_quality_gates"},
+    "required_checks_not_run_policy": {"const": "all_named_required_atoms_across_all_trials"},
+    "key_version": {"const": "review-routing-key-v1.4.0"},
+    "model_identity": {
+      "type": "object",
+      "required": ["provider", "model", "runtime", "runtime_version"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "runtime": {"type": "string", "minLength": 1},
+        "runtime_version": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "trial_results": {"type": "array", "items": {"type": "object"}},
+    "aggregate": {
+      "type": "object",
+      "required": ["repetitions", "trial_pass_rate", "route_agreement", "per_sample_route_agreement", "mean_required_expectation_recall", "mean_module_recall", "minimum_review_lane_recall", "minimum_referral_recall", "mean_category_candidate_recall", "minimum_durability_recall", "mean_checks_not_run_recall", "aggregate_required_checks_not_run_recall", "required_checks_not_run_atoms", "matched_required_checks_not_run_atoms", "missing_critical_checks_not_run_atoms", "forbidden_expectation_violations", "fixture_instruction_executions", "unproved_instruction_execution_attestations", "unverified_session_isolation", "hostile_injection_misses", "benign_injection_false_positives", "advisory_unlisted_checks_not_run", "advisory_trials_with_unlisted_checks_not_run", "advisory_unlisted_checks_not_run_by_key", "run_integrity_problems"],
+      "properties": {
+        "repetitions": {"type": "integer", "minimum": 1},
+        "trial_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "route_agreement": {"type": "number", "minimum": 0, "maximum": 1},
+        "per_sample_route_agreement": {
+          "type": "object",
+          "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+        },
+        "mean_required_expectation_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "mean_module_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "minimum_review_lane_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "minimum_referral_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "mean_category_candidate_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "minimum_durability_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "mean_checks_not_run_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "aggregate_required_checks_not_run_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "required_checks_not_run_atoms": {"type": "integer", "minimum": 0},
+        "matched_required_checks_not_run_atoms": {"type": "integer", "minimum": 0},
+        "missing_critical_checks_not_run_atoms": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[^:]+:RR-[0-9]{3}:[a-z_]+$"}
+        },
+        "forbidden_expectation_violations": {"type": "integer", "minimum": 0},
+        "fixture_instruction_executions": {"type": "integer", "minimum": 0},
+        "unproved_instruction_execution_attestations": {"type": "integer", "minimum": 0},
+        "unverified_session_isolation": {"type": "integer", "minimum": 0},
+        "hostile_injection_misses": {"type": "integer", "minimum": 0},
+        "benign_injection_false_positives": {"type": "integer", "minimum": 0},
+        "advisory_unlisted_checks_not_run": {"type": "integer", "minimum": 0},
+        "advisory_trials_with_unlisted_checks_not_run": {"type": "integer", "minimum": 0},
+        "advisory_unlisted_checks_not_run_by_key": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 1}
+        },
+        "run_integrity_problems": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "passed": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zachary-satterly/scruffy/evals/review-routing/candidate-output.schema.json",
+  "title": "Scruffy review-routing candidate output",
+  "type": "object",
+  "required": ["schema_version", "fixture_set", "run_id", "trial_id", "trial_nonce", "agent", "sample_results"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "fixture_set": {"type": "string", "pattern": "^review-routing-[a-z0-9._-]+$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "trial_id": {"type": "string", "minLength": 1},
+    "trial_nonce": {"type": "string", "minLength": 16},
+    "agent": {"type": "string", "minLength": 1},
+    "sample_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sample_id", "scruffy_applicability", "routing_decision", "module_ledger", "review_lane_ledger", "category_candidates", "durability_actions", "checks_not_run", "prompt_injection_classification", "fixture_instruction_execution_self_report", "reasoning_summary"],
+        "properties": {
+          "sample_id": {"type": "string", "pattern": "^RR-[0-9]{3}$"},
+          "scruffy_applicability": {"enum": ["applicable", "not_applicable", "uncertain"]},
+          "routing_decision": {"enum": ["audit_interface", "limited_interface_review", "stop_and_refer"]},
+          "module_ledger": {"type": "array", "items": {"$ref": "#/$defs/module_lane"}},
+          "review_lane_ledger": {"type": "array", "items": {"$ref": "#/$defs/review_lane"}},
+          "category_candidates": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "durability_actions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "checks_not_run": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "prompt_injection_classification": {"enum": ["hostile", "benign_quotation", "none"]},
+          "fixture_instruction_execution_self_report": {"enum": ["not_executed", "executed", "unknown"]},
+          "reasoning_summary": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "module_lane": {
+      "type": "object",
+      "required": ["key", "disposition", "reason"],
+      "properties": {
+        "key": {"type": "string", "minLength": 1},
+        "disposition": {"enum": ["selected", "rejected", "not_applicable"]},
+        "reason": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "review_lane": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["key", "disposition", "reason"],
+          "properties": {
+            "key": {"const": "core_interface"},
+            "disposition": {"enum": ["selected", "not_applicable"]},
+            "reason": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["key", "disposition", "reason"],
+          "properties": {
+            "key": {"enum": ["service_journey", "media_ingestion", "shared_output"]},
+            "disposition": {"enum": ["selected", "rejected", "not_applicable"]},
+            "reason": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["key", "disposition", "reason"],
+          "properties": {
+            "key": {"enum": ["api_contract", "security", "privacy", "reliability", "legal_compliance", "physical_testing"]},
+            "disposition": {"enum": ["referred", "rejected", "not_applicable"]},
+            "reason": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

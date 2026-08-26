@@ -17,6 +17,7 @@ CAPABILITY_LABELS = {row["key"]: row["label"] for row in AUDIT_CONTRACT["context
 CATEGORY_LABELS = {row["key"]: row["public_label"] for row in TAXONOMY["categories"]}
 SCORE_LABELS = {row["key"]: row["score_label"] for row in TAXONOMY["categories"]}
 FACET_LABELS = {row["key"]: row["label"] for row in TAXONOMY["facets"]}
+REVIEW_LANE_LABELS = {row["key"]: row["label"] for row in AUDIT_CONTRACT["context"]["review_lanes"]}
 
 PLAIN_CATEGORY_LABELS = {
     "product": "Product clarity",
@@ -66,10 +67,27 @@ EVIDENCE_KIND_LABELS = {
     "source": "Source review",
     "measurement": "Measurement",
     "analysis_receipt": "Analysis record",
+    "specialist_review": "Specialist review",
     "runtime_trace": "Performance measurement",
     "accessibility_observation": "Accessibility review",
     "copy_sample": "Copy sample",
     "supplied": "Provided evidence",
+}
+LANE_DISPOSITION_LABELS = {
+    "selected": "Included in this review",
+    "rejected": "Considered and excluded",
+    "not_applicable": "Not applicable",
+    "referred": "Referred to a specialist",
+}
+REFERRAL_STATUS_LABELS = {
+    "not_run": "Not performed",
+    "partial": "Partially performed",
+    "complete": "Completed by a specialist",
+}
+ASSUMPTION_STATUS_LABELS = {
+    "open": "Open",
+    "supported": "Supported",
+    "refuted": "Refuted",
 }
 
 PLAIN_TERM_REPLACEMENTS = (
@@ -278,6 +296,61 @@ def capability_rows(context: dict[str, Any]) -> list[list[Any]]:
         [CAPABILITY_LABELS.get(row.get("key"), row.get("capability", "")), row.get("status", ""), row.get("scope", "")]
         for row in context.get("capabilities", [])
     ]
+
+
+def routing_rows(context: dict[str, Any]) -> list[list[Any]]:
+    return [
+        [
+            REVIEW_LANE_LABELS.get(row.get("lane"), str(row.get("lane", "")).replace("_", " ").title()),
+            LANE_DISPOSITION_LABELS.get(row.get("disposition"), status_label(row.get("disposition"))),
+            row.get("reason", ""),
+        ]
+        for row in context.get("routing", [])
+    ]
+
+
+def assumption_rows(context: dict[str, Any]) -> list[list[Any]]:
+    return [
+        [
+            row.get("statement", ""),
+            ASSUMPTION_STATUS_LABELS.get(row.get("status"), status_label(row.get("status"))),
+            PRODUCT_BASIS_LABELS.get(row.get("basis"), status_label(row.get("basis"))),
+            row.get("risk_if_wrong", ""),
+            row.get("evidence_needed", ""),
+            row.get("decision_affected", ""),
+        ]
+        for row in context.get("assumptions", [])
+    ]
+
+
+def referral_rows(context: dict[str, Any]) -> list[list[Any]]:
+    assets = evidence_by_id(context)
+    rows: list[list[Any]] = []
+    for row in context.get("referrals", []):
+        specialist_summaries: list[str] = []
+        for evidence_id in row.get("specialist_artifact_refs", []):
+            asset = assets.get(evidence_id, {})
+            receipt = asset.get("specialist_review")
+            if not isinstance(receipt, dict):
+                continue
+            date_or_version = receipt.get("reviewed_at") or receipt.get("artifact_version") or ""
+            specialist_summaries.append(
+                f"{receipt.get('reviewer_or_authority', '')}. Scope: {receipt.get('scope', '')} "
+                f"Result: {receipt.get('result', '')} Date or version: {date_or_version}. "
+                f"Verification: {receipt.get('verification_state', '')}."
+            )
+        rows.append(
+            [
+                REVIEW_LANE_LABELS.get(row.get("lane"), str(row.get("lane", "")).replace("_", " ").title()),
+                row.get("summary", ""),
+                REFERRAL_STATUS_LABELS.get(row.get("review_status"), status_label(row.get("review_status"))),
+                row.get("reason", ""),
+                row.get("claim_boundary", ""),
+                public_evidence_summary(row.get("evidence_refs"), context),
+                " ".join(specialist_summaries) or "No completed specialist receipt.",
+            ]
+        )
+    return rows
 
 
 def score_row_label(key: Any) -> str:

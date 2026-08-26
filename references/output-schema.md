@@ -7,7 +7,7 @@ For durable or repeated audits, [references/durability.md](durability.md) is bin
 For a substantial file-backed audit, produce:
 
 1. `findings.json` — complete registry, revision lineage, presentation lists, and run receipt
-2. `context.json` — product frame, tasks, capabilities, category scores, typed evidence, work orders, and checks not run
+2. `context.json` — product frame, tasks, capabilities, routing, assumptions, specialist referrals, category scores, typed evidence, work orders, and checks not run
 3. `decisions.json` — one decision record per finding/enhancement plus history
 4. Markdown report — complete human-readable audit
 5. Self-contained HTML dashboard when a viewer is available
@@ -20,15 +20,16 @@ Chat-only work emits the same registry as a JSON block when files are unavailabl
 1. Outcome and evidence boundary
 2. Product framing and representative tasks
 3. Capability and coverage ledger
-4. Category scores and verbal result
-5. Prioritized findings (maximum eight)
-6. Additional open and needs-verification findings
-7. Prioritized and additional enhancements
-8. Strengths to preserve
-9. Fixed, cleared, merged, and superseded items
-10. Revision reconciliation table
-11. Work orders and acceptance checks
-12. Checks not run
+4. Routing, assumptions, and specialist referrals
+5. Category scores and verbal result
+6. Prioritized findings (maximum eight)
+7. Additional open and needs-verification findings
+8. Prioritized and additional enhancements
+9. Strengths to preserve
+10. Fixed, cleared, merged, and superseded items
+11. Revision reconciliation table
+12. Work orders and acceptance checks
+13. Checks not run
 
 Every registry item must be present in the Markdown report and HTML dashboard. Collapsing resolved items is allowed; omission is not.
 
@@ -43,6 +44,7 @@ New audits emit registry schema `2.1`. Schema `2.0` remains readable for revisio
   "target": "https://example.com",
   "revision_id": "r2",
   "baseline_revision_id": "r1",
+  "scruffy_applicability": "applicable",
   "run": {
     "requested_mode": "audit",
     "effective_mode": "audit",
@@ -138,20 +140,80 @@ Allowed revision dispositions: `new`, `carried`, `reopened`, `fixed`, `cleared`,
 
 `merged` and `superseded` require `destination_id`. `fixed` and `cleared` require direct revision evidence. Findings require severity `critical`, `high`, `medium`, or `low`. Strengths use `none`. Enhancements use `high`, `medium`, or `low` as priority.
 
-## Context and typed evidence
+## Context, routing, and typed evidence
 
 Schema-2.1 registries require `context.json`. Use the exact product-frame, capability, score, task, and evidence keys generated in [audit-contract.md](audit-contract.md).
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "audit_id": "stable-product-id",
   "revision_id": "r2",
+  "baseline_revision_id": "r1",
   "title": "Example audit",
   "outcome": {"label": "Sound with material gaps", "summary": "...", "confidence": "high"},
   "product_frame": [{"key": "audience", "answer": "...", "basis": "observed"}],
   "tasks": [{"id": "T1", "goal": "...", "result": "...", "status": "pass", "evidence_refs": ["EV-TASK"]}],
   "capabilities": [{"key": "source_read", "status": "available", "scope": "..."}],
+  "routing": [
+    {
+      "id": "ROUTE-CORE-INTERFACE",
+      "lane": "core_interface",
+      "disposition": "selected",
+      "reason": "The request is an interface audit.",
+      "evidence_refs": ["EV-TASK"],
+      "referral_ids": [],
+      "first_seen_revision": "r1",
+      "last_observed_revision": "r2",
+      "revision_disposition": "carried",
+      "disposition_reason": "The interface-audit boundary is unchanged."
+    },
+    {
+      "id": "ROUTE-SECURITY",
+      "lane": "security",
+      "disposition": "referred",
+      "reason": "The target processes untrusted uploads, but exploitability was outside this interface review.",
+      "evidence_refs": ["EV-SOURCE"],
+      "referral_ids": ["REF-SECURITY-1"],
+      "first_seen_revision": "r1",
+      "last_observed_revision": "r2",
+      "revision_disposition": "carried",
+      "disposition_reason": "The specialist boundary remains open."
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "ASM-AUDIENCE-1",
+      "statement": "Most guests will arrive by scanning a printed code on a phone.",
+      "basis": "supplied",
+      "confidence": "moderate",
+      "risk_if_wrong": "The representative task set may omit the dominant entry path.",
+      "evidence_needed": "Current event plan and real-device entry-path observations.",
+      "decision_affected": "Which guest journey receives first-priority acceptance testing.",
+      "status": "open",
+      "evidence_refs": ["EV-SUPPLIED"],
+      "first_seen_revision": "r1",
+      "last_observed_revision": "r2",
+      "revision_disposition": "carried",
+      "disposition_reason": "The operating assumption remains unresolved."
+    }
+  ],
+  "referrals": [
+    {
+      "id": "REF-SECURITY-1",
+      "lane": "security",
+      "summary": "Validate hostile-upload attack paths and severity.",
+      "reason": "Scruffy can report visible upload consequences but does not perform vulnerability validation.",
+      "review_status": "complete",
+      "claim_boundary": "No claim is made that upload processing is secure.",
+      "evidence_refs": ["EV-SOURCE", "EV-SECURITY-REVIEW"],
+      "specialist_artifact_refs": ["EV-SECURITY-REVIEW"],
+      "first_seen_revision": "r1",
+      "last_observed_revision": "r2",
+      "revision_disposition": "carried",
+      "disposition_reason": "The specialist review completed in this revision."
+    }
+  ],
   "scores": [{"category": "product", "score": 0, "evidence": "...", "evidence_refs": ["EV-TASK"]}],
   "work_orders": [],
   "checks_not_run": [{"check": "Runtime performance", "reason": "No trace access", "impact": "Performance score is N/A"}],
@@ -162,6 +224,36 @@ Schema-2.1 registries require `context.json`. Use the exact product-frame, capab
       "locator": "T1",
       "description": "Observed primary-task result",
       "verification": "observed"
+    },
+    {
+      "id": "EV-SOURCE",
+      "kind": "source",
+      "locator": "https://example.com/source-boundary",
+      "description": "Supplied source boundary that triggered specialist review",
+      "verification": "supplied"
+    },
+    {
+      "id": "EV-SUPPLIED",
+      "kind": "supplied",
+      "locator": "https://example.com/product-brief",
+      "description": "Owner-supplied product and audience brief",
+      "verification": "supplied"
+    },
+    {
+      "id": "EV-SECURITY-REVIEW",
+      "kind": "specialist_review",
+      "locator": "evidence/security-review-v1.md",
+      "description": "Independent security review receipt and bounded result.",
+      "verification": "observed",
+      "specialist_review": {
+        "discipline": "security",
+        "reviewer_or_authority": "Named independent security reviewer or authoritative reviewing body",
+        "scope": "Hostile-upload attack paths and exploitability within the named build.",
+        "result": "The review's bounded conclusion, including unresolved questions.",
+        "reviewed_at": "2026-08-25",
+        "artifact_version": "review-v1",
+        "verification_state": "verified"
+      }
     }
   ],
   "visual_evidence": [
@@ -183,7 +275,13 @@ Schema-2.1 registries require `context.json`. Use the exact product-frame, capab
 }
 ```
 
-The complete document contains every required product-frame question, capability, and canonical category score. Registry, task, score, blind, and editorial references resolve to typed evidence IDs. Captured local screenshots, source files, traces, copy samples, and analysis receipts must exist relative to `context.json` or at their absolute path. Context schema 1.1 also contains one `visual_evidence` record for every captured screenshot/item pair. A captured screenshot not cited by any item receives one record with `item_id: null`.
+The complete document contains every required product-frame question, capability, canonical category score, and routing lane. Registry, task, score, routing, assumption, referral, blind, and editorial references resolve to typed evidence IDs. Captured local screenshots, source files, traces, copy samples, and analysis receipts must exist relative to `context.json` or at their absolute path. Context schemas 1.1 and 1.2 contain one `visual_evidence` record for every captured screenshot/item pair. A captured screenshot not cited by any item receives one record with `item_id: null`.
+
+Context 1.2 records `scruffy_applicability` as `applicable`, `not_applicable`, or `uncertain`, then records each canonical lane exactly once as `selected`, `rejected`, `not_applicable`, or `referred`. The core interface lane is selected when Scruffy applies or applicability is uncertain. A non-interface stop-and-refer marks Scruffy and the core lane not applicable, selects no Scruffy-owned lane, emits no interface items or work orders, records representative tasks as not run, and leaves every category score as `N/A`. Specialist-owned lanes cannot be selected as Scruffy work. A referred lane links to one or more referral records for the same lane; every referral is linked from the routing ledger. Routing keys never appear in `items[].category`.
+
+Routing, assumption, and referral IDs are durable within an audit. Every row records `first_seen_revision`, `last_observed_revision`, `revision_disposition`, and `disposition_reason`. Use `new` only for a genuinely new row, `carried` when its substantive data is unchanged, and `updated` when its status, evidence, boundary, or routing decision changed. Prior rows remain present even after an assumption is supported or refuted or a referral is completed. Context 1.2 also records `baseline_revision_id`; a revision must be validated with `--baseline-context` so stable IDs cannot silently disappear or be reissued.
+
+Open assumptions may omit evidence only when their basis is `unknown`; grounded, supported, and refuted assumptions cite evidence. Specialist referrals use `not_run`, `partial`, or `complete` to disclose the actual review boundary and state what Scruffy will not claim. `specialist_artifact_refs` is empty for `not_run`. A `complete` referral must cite a lane-matched `specialist_review` receipt whose metadata names the discipline, reviewer or authority, scope, result, a date or artifact version, and `verification_state: verified`. Human reports render an inspectable summary of the supporting receipts instead of showing a bare completion label.
 
 ## Decisions
 
@@ -213,6 +311,12 @@ The decisions schema version must match its registry. Validate a new audit with:
 
 ```sh
 python3 scripts/validate_audit.py findings.json --context context.json --decisions decisions.json --dashboard dashboard.html --markdown report.md
+```
+
+Validate a context-1.2 revision against both baselines:
+
+```sh
+python3 scripts/validate_audit.py findings.json --context context.json --baseline prior-findings.json --baseline-context prior-context.json --decisions decisions.json --baseline-decisions prior-decisions.json --dashboard dashboard.html --markdown report.md
 ```
 
 ## Token data

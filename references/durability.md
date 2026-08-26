@@ -14,6 +14,11 @@ Use this protocol for every substantial audit that creates files and every run w
 8. The registry is complete. Presentation limits affect only shortlist arrays.
 9. Decisions remain attached to the original item. A destination item never inherits approval automatically.
 10. If a baseline cannot be read, stop revision reconciliation, label the run a provisional independent audit, and do not claim continuity.
+11. Context 1.2 routing, assumption, and referral IDs remain attached to the same lane, proposition, or specialist question across revisions; never reuse them for a different concern.
+12. Every canonical routing lane remains visible across revisions. Every ledger row records first-seen and last-observed revisions plus an explicit `new`, `carried`, or `updated` disposition and reason.
+13. A context-1.2 revision names `baseline_revision_id` and supplies the prior `context.json` to validation. Missing baseline context blocks a continuity claim.
+14. A completed specialist referral survives later revisions with its verified typed specialist-review receipt and claim boundary; a later run may update it, never erase it.
+15. A non-interface stop-and-refer preserves the ledger without fabricating interface coverage: Scruffy is marked not applicable, no Scruffy-owned lane is selected, and no interface finding, work order, or score is emitted.
 
 Do not renumber a legacy ID merely to normalize padding or prefixes. Preserve `ENH-1` if that is the published identity; use any preferred convention only for genuinely new IDs.
 
@@ -34,6 +39,8 @@ Do not renumber a legacy ID merely to normalize padding or prefixes. Preserve `E
 7. Reconcile decisions by ID. Preserve each prior decision and history entry. New and destination items start `pending` unless the user explicitly decides otherwise.
 8. Validate registry continuity, decision coverage, presentation lists, and dashboard completeness.
 9. Publish a reconciliation table showing every prior ID, new status, disposition reason, and destination when applicable.
+10. Reconcile the context 1.2 routing, assumption, and referral ledgers against the baseline context. Preserve open, supported, and refuted assumptions; preserve completed referrals and their verified specialist-review receipts even when no new specialist work ran.
+11. Run `validate_audit.py` with both `--baseline` and `--baseline-context`. Treat a missing baseline context, dropped ledger ID, reused identity, or inaccurate carried/updated disposition as a hard continuity failure.
 
 ## Registry contract
 

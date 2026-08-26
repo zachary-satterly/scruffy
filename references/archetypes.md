@@ -86,6 +86,29 @@ A person supplies an identifier — a name, address, order number, company — a
 - Playback/recording permission and capability states
 - Unsaved work, autosave truthfulness, version history, and destructive reset
 
+## File or media ingestion
+
+- Map the real journey from select, capture, or import through validation, transfer, processing, review or publication, retention, and deletion
+- Build a source matrix from formats the product actually promises: file type, size, codec, dimensions or duration, metadata, filename shape, browser or device origin, and batch size
+- Compare client-visible acceptance with server-authoritative acceptance; a picker accepting a file is not proof that transfer or processing will succeed
+- Exercise per-file and batch progress, cancellation, retry, resume, duplicate submission, reordered completion, and partial success without collapsing the batch into one false status
+- Distinguish transfer failure from downstream thumbnailing, transcoding, scanning, moderation, indexing, storage, quota, or publication failure in user-visible state and recovery
+- Stress Unicode and long filenames, orientation, color profile, timestamps, location metadata, zero-byte input, misleading extensions, and valid-but-uncommon formats without exposing sensitive metadata unnecessarily
+- Verify that held, rejected, or review-required items have literal status and recovery while private moderation or safety internals remain appropriately restricted
+- Confirm that deletion, replacement, retention, and derived-output behavior match the visible promise; local previews and green unit tests do not prove provider persistence
+- Treat unavailable real-device, codec, provider, storage-limit, or long-running processing evidence as `not run`, never as a pass
+
+## Multi-channel service blueprint
+
+- Map each representative journey stage across user actions, visible frontstage responses, backstage operations, external dependencies, responsible roles, and evidence of completion
+- Exercise handoffs among every promised channel that actually exists — for example web, email, text message, support, kiosk, device, printed material, or an in-person step
+- Verify that identifiers, state, deadlines, permissions, and recovery instructions remain coherent when a person leaves one channel and resumes in another
+- Distinguish a request being accepted from queued, delivered, processed, acknowledged, and completed; a local success screen does not prove a downstream channel worked
+- Test interruption, retry, duplicate delivery, delayed delivery, stale instructions, conflicting updates, escalation, and a channel becoming unavailable
+- Identify who may view, change, approve, reverse, or communicate each state; do not infer operational authority from a visible control
+- Compare terminology, accessibility, localization, privacy disclosures, and consequence language across channels without forcing every channel into identical presentation
+- Separate product evidence from provider, staff, device, venue, legal, or physical-operation proof, and record unavailable external checks as `not run`
+
 ## Marketing, landing, or static content
 
 - Audience/outcome clarity and primary conversion path

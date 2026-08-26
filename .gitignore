@@ -13,3 +13,7 @@ CLAUDE.local.md
 
 # Local operating-system metadata.
 .DS_Store
+
+# Private review-routing holdouts and local run evidence never ship.
+/evals/review-routing/holdouts/
+/evals/review-routing/runs/

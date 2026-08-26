@@ -54,10 +54,20 @@
     ]
   },
   "context": {
-    "schema_version": "1.1",
+    "schema_version": "1.2",
     "legacy_schema_versions": [
-      "1.0"
+      "1.0",
+      "1.1"
     ],
+    "feature_schema_versions": {
+      "visual_evidence": [
+        "1.1",
+        "1.2"
+      ],
+      "routing": [
+        "1.2"
+      ]
+    },
     "product_frame_questions": [
       {
         "key": "audience",
@@ -97,6 +107,11 @@
       "partial",
       "needs_verification",
       "not_run"
+    ],
+    "scruffy_applicability_statuses": [
+      "applicable",
+      "not_applicable",
+      "uncertain"
     ],
     "capabilities": [
       {
@@ -157,6 +172,7 @@
       "source",
       "measurement",
       "analysis_receipt",
+      "specialist_review",
       "runtime_trace",
       "accessibility_observation",
       "copy_sample",
@@ -172,7 +188,100 @@
       "provided",
       "not_needed"
     ],
-    "visual_annotation_max_regions": 4
+    "visual_annotation_max_regions": 4,
+    "review_lanes": [
+      {
+        "key": "core_interface",
+        "label": "Core interface audit",
+        "owner": "scruffy",
+        "description": "The eight canonical interface categories, representative tasks, rendered states, and implementation consequences."
+      },
+      {
+        "key": "service_journey",
+        "label": "End-to-end service journey",
+        "owner": "scruffy",
+        "description": "Cross-channel handoffs, actors, recovery paths, and visible service gaps around the interface."
+      },
+      {
+        "key": "media_ingestion",
+        "label": "Media ingestion",
+        "owner": "scruffy",
+        "description": "Capture, upload, transformation, moderation, projection, download, deletion, and visible failure states for media products."
+      },
+      {
+        "key": "shared_output",
+        "label": "Shared or physical output",
+        "owner": "scruffy",
+        "description": "Ceremonial, projected, printed, QR, and other shared-output interface surfaces within available evidence."
+      },
+      {
+        "key": "api_contract",
+        "label": "API contract review",
+        "owner": "specialist",
+        "description": "API semantics, compatibility, authorization, and protocol correctness beyond observable interface consequences."
+      },
+      {
+        "key": "security",
+        "label": "Security review",
+        "owner": "specialist",
+        "description": "Threat modeling, vulnerability discovery, exploitability, and security severity."
+      },
+      {
+        "key": "privacy",
+        "label": "Privacy review",
+        "owner": "specialist",
+        "description": "Data-subject harms, minimization, retention, consent, and privacy-law analysis beyond visible interface consequences."
+      },
+      {
+        "key": "reliability",
+        "label": "Reliability and operations review",
+        "owner": "specialist",
+        "description": "Production availability, observability, incident response, capacity, and provider operations."
+      },
+      {
+        "key": "legal_compliance",
+        "label": "Legal and compliance review",
+        "owner": "specialist",
+        "description": "Legal sufficiency, jurisdiction-specific obligations, regulated claims, and policy approval."
+      },
+      {
+        "key": "physical_testing",
+        "label": "Physical and real-device testing",
+        "owner": "specialist",
+        "description": "Real-device, venue, lighting, distance, printer, projector, signage, and other physical acceptance evidence."
+      }
+    ],
+    "lane_dispositions": [
+      "selected",
+      "rejected",
+      "not_applicable",
+      "referred"
+    ],
+    "assumption_statuses": [
+      "open",
+      "supported",
+      "refuted"
+    ],
+    "assumption_confidence": [
+      "high",
+      "moderate",
+      "low",
+      "unknown"
+    ],
+    "referral_review_statuses": [
+      "not_run",
+      "partial",
+      "complete"
+    ],
+    "ledger_revision_dispositions": [
+      "new",
+      "carried",
+      "updated"
+    ],
+    "specialist_review_verification_states": [
+      "verified",
+      "not_verified"
+    ]
   },
   "editorial_review": {
     "review_types": [

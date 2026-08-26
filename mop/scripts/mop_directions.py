@@ -353,7 +353,11 @@ def implementable_steps(plan: dict, directions: dict | None) -> list[dict]:
 
 def _cmd_scaffold(args) -> int:
     interop = load_interop()
-    bundle = load_bundle(args.bundle, interop)
+    bundle = load_bundle(
+        args.bundle,
+        interop,
+        baseline_source=args.baseline_bundle,
+    )
     plan = build_plan(bundle, interop, args.authorized)
     augmentations = json.loads(Path(args.preflight).read_text(encoding="utf-8")).get("augmentations") if args.preflight else None
     doc = scaffold_directions(plan, augmentations, bundle=bundle, templates_dir=args.templates)
@@ -367,7 +371,11 @@ def _cmd_scaffold(args) -> int:
 
 def _cmd_check(args) -> int:
     interop = load_interop()
-    bundle = load_bundle(args.bundle, interop)
+    bundle = load_bundle(
+        args.bundle,
+        interop,
+        baseline_source=args.baseline_bundle,
+    )
     plan = build_plan(bundle, interop, args.authorized)
     path = Path(args.directions or (Path(args.bundle) / "directions.json"))
     directions = json.loads(path.read_text(encoding="utf-8"))
@@ -386,6 +394,10 @@ def main(argv=None) -> int:
     for name, fn in (("scaffold", _cmd_scaffold), ("check", _cmd_check)):
         p = sub.add_parser(name)
         p.add_argument("bundle", help="Scruffy audit bundle directory")
+        p.add_argument(
+            "--baseline-bundle",
+            help="prior Scruffy bundle directory required by a repeat context-1.2 audit",
+        )
         p.add_argument("--authorized", action="store_true")
         if name == "scaffold":
             p.add_argument("--preflight", help="mop_preflight --json output file")
