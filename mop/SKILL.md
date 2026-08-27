@@ -28,7 +28,9 @@ disclosed, never assumed), a validated or freshly scaffolded `directions.json`
 (three structurally distinct, principle-cited directions per design group, with
 template/screenshot imagery attached when the runtime has it), and
 `mop-dashboard.html` — the self-contained picker the human uses to select
-directions and approve items. Implementation begins only after the human's
+directions and approve items. Its primary action copies a paste-ready AI handoff
+containing both `decisions.json` and `directions.json`; separate JSON downloads
+remain available as fallback. Implementation begins only after the human's
 exported selections pass `mop_directions.py check`; a visual direction without
 an image anchor cannot be selected, and text-only design advice fails closed.
 

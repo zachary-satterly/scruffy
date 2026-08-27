@@ -43,6 +43,11 @@ the gap — never hand-edit the bundle to make it parse.
 - **Approval.** Only items whose `decisions.json` value is `approve` are actioned.
   Deferred and rejected items are never implemented, even if they look easy.
 
+When using `mop-dashboard.html`, set decisions and design directions, then use
+**Copy all choices for AI** and paste the generated handoff into the AI task.
+It contains exact fenced JSON for `decisions.json` and, when directions exist,
+`directions.json`. Individual JSON downloads remain available as a fallback.
+
 ## 3. Build the plan
 
 ```sh

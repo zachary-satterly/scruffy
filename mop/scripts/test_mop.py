@@ -435,6 +435,7 @@ def test_dashboard_is_self_contained_and_embeds_images(tmp=None):
     assert "Recommended direction" in doc        # direction overlay rendered
     # Decision surface: controls + export present, decision reflects the bundle.
     assert 'data-item-id="AS-02"' in doc
+    assert "Copy all choices for AI" in doc
     assert "Download decisions.json" in doc
     assert 'dec-approve' in doc                   # AS-02 is approved in the fixture
 
@@ -451,7 +452,30 @@ def test_dashboard_shows_all_items_as_a_decision_surface():
     # Each carries its current decision, and the loop-closing export exists.
     assert 'dec-defer' in doc and 'dec-reject' in doc and 'dec-approve' in doc
     assert 'id="dlBtn"' in doc and "decisions.json" in doc
+    assert 'id="copyAllBtn"' in doc
     assert 'data-decision=' in doc                # in-browser decision state
+
+
+def test_dashboard_exports_only_real_decisions_and_copies_both_artifacts_for_ai():
+    import tempfile
+    from mop_dashboard import render
+    from mop_directions import scaffold_directions
+    _, plan = _plan()
+    directions = _filled(scaffold_directions(plan, None))
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        for name in ("findings.json", "context.json", "decisions.json", "tokens.json"):
+            src = FIXTURE / name
+            if src.exists():
+                (d / name).write_text(src.read_text())
+        (d / "directions.json").write_text(json.dumps(directions))
+        html = render(d, None, str(d / "dash.html"), authorized=True).read_text()
+    assert "document.querySelectorAll('.decide[data-item-id]')" in html
+    assert "document.querySelectorAll('.decide').forEach" not in html
+    assert "buildAIHandoff" in html
+    assert "'decisions.json', '```json'" in html
+    assert "'directions.json', '```json'" in html
+    assert "Copy failed — use JSON downloads" in html
 
 
 def test_dashboard_unknown_mime_fails_closed():
@@ -662,6 +686,7 @@ def test_dashboard_renders_direction_picker_and_export():
         out = render(d, None, str(d / "dash.html"), authorized=True)
         html = out.read_text()
     assert "Design directions" in html
+    assert "Copy all choices for AI" in html
     assert "Download directions.json" in html
     assert 'data-group-id="GRP-1"' in html
     assert html.count('type="radio"') >= 3

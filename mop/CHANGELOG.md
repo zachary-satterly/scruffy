@@ -8,6 +8,10 @@ First functional release: implements approved Scruffy findings and hands them ba
 for re-audit. Not yet exercised against a real-world audit outside the fixture.
 
 ### Added
+- Made the dashboard's primary handoff a paste-ready **Copy all choices for AI**
+  action containing exact `decisions.json` and `directions.json` blocks, while
+  retaining separate downloads as fallback. Direction controls no longer leak
+  orphan rows into `decisions.json`.
 - Product record (`PRODUCT.md`) via Impeccable init.
 - Consumer interop contract against Scruffy's output schema
   (`schema/interop.json`): registry 2.1, context 1.2 (1.0 and 1.1 read-only),

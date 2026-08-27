@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Generate Scruffy's repair-stage deliverable: a self-contained decision dashboard.
 
+The primary handoff copies both human-choice artifacts in a paste-ready AI
+message. Individual JSON downloads remain available as a fallback.
+
 The operator reads Mop output in a terminal, so a dashboard is the only surface
 where they can see evidence and act on it. It must therefore be one file with
 every image embedded as a ``data:`` URI — no sibling folder, no external fetch,
@@ -167,8 +170,8 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
     p.append(f'<div class="decbar"><div class="tchip">{_e(audit_id)}{" &middot; " + _e(target[:60]) if target else ""}</div><div class="counts">'
              '<b id="c-approve">0</b> approved &middot; <b id="c-defer">0</b> deferred &middot; '
              '<b id="c-reject">0</b> rejected &middot; <b id="c-pending">0</b> pending</div>'
-             '<div class="acts"><button id="copyBtn" type="button">Copy decisions.json</button>'
-             '<button id="dlBtn" type="button" class="primary">Download decisions.json</button></div></div>')
+             '<div class="acts"><button id="copyAllBtn" type="button" class="primary">Copy all choices for AI</button>'
+             '<button id="dlBtn" type="button">Download decisions.json</button></div></div>')
 
     # Direction picker (design lanes): a human selects; recommended is advice only.
     if direction_doc and direction_doc.get("groups"):
@@ -224,7 +227,7 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
                      '<div class="decide"><button type="button" class="b-clear" data-clear-group>Clear selection</button></div>'
                      '</div></article>')
         p.append('<div class="acts" style="margin-bottom:24px">'
-                 '<button id="dirDlBtn" type="button" class="primary">Download directions.json</button></div>'
+                 '<button id="dirDlBtn" type="button">Download directions.json</button></div>'
                  '</section>')
 
     # Lead screenshots (rendered evidence not tied to one item).
@@ -243,8 +246,9 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
                  + _e("; ".join(gate.get("reasons", []))) + '</p>')
 
     p.append(f'<section><h2>Findings &amp; decisions &mdash; {len(_ordered_items(bundle))} item(s)</h2>')
-    p.append('<p class="hint">Set a decision on each item, then Download decisions.json and return it to '
-             'Scruffy. Only <b>approved</b> items are implemented; re-audit evidence is required to clear them.</p>')
+    p.append('<p class="hint">Set each decision and design direction, then use <b>Copy all choices for AI</b> '
+             'and paste the result into your AI task. The separate JSON downloads remain available as a fallback. '
+             'Only <b>approved</b> items are implemented; re-audit evidence is required to clear them.</p>')
 
     for n, item in enumerate(_ordered_items(bundle), 1):
         iid = item["id"]
@@ -386,7 +390,7 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
     if preflight:
         aug = ", ".join(f"{k}={v.get('status')}" for k, v in preflight["augmentations"].items())
     p.append(f'<footer><span>Scruffy&rsquo;s Mop &middot; augmentations: {_e(aug)} &middot; self-contained</span>'
-             '<span>Approve here &rarr; download decisions.json &rarr; Mop implements &rarr; Scruffy re-audits.</span></footer>')
+             '<span>Choose here &rarr; copy all choices for AI &rarr; Mop implements &rarr; Scruffy re-audits.</span></footer>')
     p.append('</div>')
 
     audit_meta = {
@@ -526,12 +530,13 @@ _SCRIPT = """<script>
 (function(){
   var AUDIT = __AUDIT__;
   var DIRECTIONS = __DIRECTIONS__;
+  function decisionElements(){return document.querySelectorAll('.decide[data-item-id]');}
   function refresh(){
     var c={approve:0,defer:0,reject:0,pending:0};
-    document.querySelectorAll('.decide').forEach(function(el){var d=el.dataset.decision||'pending';c[d]=(c[d]||0)+1;});
+    decisionElements().forEach(function(el){var d=el.dataset.decision||'pending';c[d]=(c[d]||0)+1;});
     ['approve','defer','reject','pending'].forEach(function(k){var n=document.getElementById('c-'+k);if(n)n.textContent=c[k]||0;});
   }
-  document.querySelectorAll('.decide').forEach(function(el){
+  decisionElements().forEach(function(el){
     var pill=document.querySelector('[data-pill="'+el.dataset.itemId+'"]');
     el.querySelectorAll('.seg button').forEach(function(b){
       b.addEventListener('click',function(){
@@ -543,7 +548,7 @@ _SCRIPT = """<script>
     });
   });
   function build(){
-    var decisions=[].map.call(document.querySelectorAll('.decide'),function(el){
+    var decisions=[].map.call(decisionElements(),function(el){
       return {item_id:el.dataset.itemId, decision:el.dataset.decision||'pending',
         note:(el.querySelector('.note')||{}).value||'', updated_at:new Date().toISOString(),
         decision_source:'current', destination_id:null, history:[]};
@@ -551,11 +556,27 @@ _SCRIPT = """<script>
     return JSON.stringify({schema_version:AUDIT.schema_version||'2.1', audit_id:AUDIT.audit_id,
       revision_id:AUDIT.revision_id, baseline_revision_id:AUDIT.baseline_revision_id||null, decisions:decisions}, null, 2);
   }
-  var copyBtn=document.getElementById('copyBtn'), dlBtn=document.getElementById('dlBtn');
-  copyBtn.addEventListener('click',function(){
-    var t=build();
-    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){
-      copyBtn.textContent='Copied \\u2713'; setTimeout(function(){copyBtn.textContent='Copy decisions.json';},1400);});}
+  function buildAIHandoff(){
+    var parts=['Apply these exact Scruffy repair choices for audit '+AUDIT.audit_id+' at revision '+AUDIT.revision_id+'.',
+      '', 'decisions.json', '```json', build(), '```'];
+    if(DIRECTIONS){parts.push('', 'directions.json', '```json', JSON.stringify(DIRECTIONS,null,2), '```');}
+    return parts.join('\\n');
+  }
+  function copyText(text){
+    if(navigator.clipboard&&navigator.clipboard.writeText){return navigator.clipboard.writeText(text);}
+    return new Promise(function(resolve,reject){
+      var area=document.createElement('textarea'); area.value=text; area.setAttribute('readonly','');
+      area.style.position='fixed'; area.style.opacity='0'; document.body.appendChild(area); area.select();
+      try{if(document.execCommand('copy'))resolve();else reject(new Error('copy refused'));}
+      catch(err){reject(err);}finally{document.body.removeChild(area);}
+    });
+  }
+  var copyAllBtn=document.getElementById('copyAllBtn'), dlBtn=document.getElementById('dlBtn');
+  copyAllBtn.addEventListener('click',function(){
+    copyText(buildAIHandoff()).then(function(){
+      copyAllBtn.textContent='Copied for AI \\u2713';
+      setTimeout(function(){copyAllBtn.textContent='Copy all choices for AI';},1600);
+    }).catch(function(){copyAllBtn.textContent='Copy failed — use JSON downloads';});
   });
   dlBtn.addEventListener('click',function(){
     var b=new Blob([build()],{type:'application/json'}); var u=URL.createObjectURL(b);

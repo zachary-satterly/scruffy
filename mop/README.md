@@ -72,6 +72,10 @@ It produces `mop-preflight.json`, a validated or scaffolded `directions.json`,
 and one self-contained `mop-dashboard.html`. The filenames are stable machine
 interfaces, not product names.
 
+The dashboard's primary **Copy all choices for AI** action produces one
+paste-ready handoff with exact `decisions.json` and `directions.json` blocks.
+Separate JSON downloads remain available as a fallback.
+
 The underlying tools remain available individually through `mop_bundle.py`,
 `mop_preflight.py`, `mop_directions.py`, `mop_dashboard.py`, and
 `mop_handoff.py`. A worked fixture is available in
