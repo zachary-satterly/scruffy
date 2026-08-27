@@ -6,6 +6,6 @@ a second character or a companion-product mark.
 
 Files retained in this directory are legacy source material only and must not
 appear in current product surfaces. New imagery follows the root
-[`assets/BRAND.md`](../../assets/BRAND.md): one character, flat 2D linework,
-deep green/rust/warm gray/ochre, no gradients, and saturated color only when it
-carries meaning.
+[`assets/BRAND.md`](../../assets/BRAND.md): one character, a shared white/red
+interface system, flat 2D linework for illustration, no decorative gradients,
+and saturated color only when it carries meaning.

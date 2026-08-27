@@ -503,89 +503,92 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
     ]
 
     return f"""<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{esc(humanize_text(title, item_labels=item_labels, evidence_assets=evidence_assets))}</title>
   <style>
-    :root{{--ink:#0c1210;--panel:#101b16;--panel2:#0f1a15;--paper:#f2f4f1;--mut:#8fa39a;--line:#24352e;--gold:#e4c56a;--warn:#ff9d45;--bad:#ff6a55;--ok:#59d19a;--blue:#6db3ff;--violet:#a99bd6;
-      font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;color:var(--paper);background:var(--ink)}}
-    *{{box-sizing:border-box}} body{{margin:0;min-height:100vh;background:var(--ink)}} a{{color:var(--gold);text-underline-offset:3px}}
-    button,select,input{{font:inherit}} :focus-visible{{outline:3px solid var(--blue);outline-offset:3px}}
+    :root{{--paper:#e9eaec;--surface:#fff;--lane:#f2f3f4;--ink:#14161a;--ink2:#4d525c;--ink3:#6d6b69;--rule:#dcdee1;
+      --brand:#d40f2e;--action-on:#fff;--link:#2a53d8;--critical:#b42318;--critical-soft:#fdeceb;--ok:#1f6b3f;--ok-soft:#e7f2ec;
+      --warn:#8a5a06;--warn-soft:#f6efe2;--violet:#6f42c1;--violet-soft:#f0eafd;--radius:8px;
+      --shadow:0 1px 2px rgb(20 22 26/.06),0 8px 24px rgb(20 22 26/.05);color-scheme:light;
+      font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:var(--paper)}}
+    *{{box-sizing:border-box}} body{{margin:0;min-height:100vh;background:var(--paper)}} a{{color:var(--link);text-underline-offset:3px}}
+    button,select,input{{font:inherit}} :focus-visible{{outline:3px solid var(--link);outline-offset:3px}}
     .num,.item-id,.strip b{{font-variant-numeric:tabular-nums}}
     .wrap{{width:min(1220px,calc(100% - 40px));margin:0 auto}}
-    .mast{{background:linear-gradient(160deg,#16281f,#0c1210 72%);border-bottom:1px solid var(--line)}}
+    .mast{{background:var(--surface);border-bottom:3px solid var(--brand)}}
     .mast .wrap{{padding:36px 0 30px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:end}}
-    .eyebrow{{margin:0 0 10px;color:var(--mut);font:700 11px/1.4 Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase}}
+    .eyebrow{{margin:0 0 10px;color:var(--brand);font:700 11px/1.4 Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase}}
     h1{{margin:0;font:500 clamp(1.7rem,3.2vw,2.8rem)/1.1 Georgia,"Times New Roman",serif;max-width:920px}}
-    .target{{margin:12px 0 0;color:var(--mut);font:.88rem/1.55 Arial,sans-serif;overflow-wrap:anywhere;max-width:820px}}
-    .verdict{{max-width:300px;padding:16px 19px;color:#171303;background:var(--gold);border-radius:10px;font:.82rem/1.35 Arial,sans-serif;box-shadow:0 18px 40px -20px rgba(0,0,0,.9)}}
+    .target{{margin:12px 0 0;color:var(--ink3);font:.88rem/1.55 Arial,sans-serif;overflow-wrap:anywhere;max-width:820px}}
+    .verdict{{max-width:300px;padding:16px 19px;color:var(--action-on);background:var(--brand);border-radius:var(--radius);font:.82rem/1.35 Arial,sans-serif;box-shadow:var(--shadow)}}
     .verdict strong{{display:block;margin-top:5px;font:600 1.25rem/1.2 Georgia,serif}}
-    .strip{{display:flex;gap:30px;flex-wrap:wrap;padding:16px 0;border-bottom:1px solid var(--line);background:var(--panel2)}}
-    .strip>div>span{{display:block;color:var(--mut);font:700 10.5px/1.4 Arial,sans-serif;letter-spacing:.11em;text-transform:uppercase}}
+    .strip{{display:flex;gap:30px;flex-wrap:wrap;padding:16px 0;border-bottom:1px solid var(--rule);background:var(--lane)}}
+    .strip>div>span{{display:block;color:var(--ink3);font:700 10.5px/1.4 Arial,sans-serif;letter-spacing:.11em;text-transform:uppercase}}
     .strip b{{font:600 1.7rem/1.15 "Helvetica Neue",Arial,sans-serif}}
-    .strip .strip-target{{margin-left:auto;max-width:360px;min-width:0}} .strip .tgt{{font:400 .78rem/1.45 Arial,sans-serif;color:var(--mut);overflow-wrap:anywhere}}
-    .strip-holder{{background:var(--panel2)}}
+    .strip .strip-target{{margin-left:auto;max-width:360px;min-width:0}} .strip .tgt{{font:400 .78rem/1.45 Arial,sans-serif;color:var(--ink3);overflow-wrap:anywhere}}
+    .strip-holder{{background:var(--lane)}}
     main.wrap{{padding:34px 0 72px}}
-    section{{padding:0 0 8px}} section+section{{border-top:1px solid var(--line);margin-top:36px}}
-    h2{{margin:34px 0 12px;color:var(--paper);font:700 12px/1.4 Arial,sans-serif;letter-spacing:.15em;text-transform:uppercase}}
-    h2:after{{content:"";display:block;margin-top:10px;width:44px;border-top:2px solid var(--gold)}}
-    .subhead{{margin:24px 0 4px;color:var(--paper);font:500 1.15rem/1.3 Georgia,serif}}
-    .section-note,.quiet,.meta{{color:var(--mut);font:.88rem/1.55 Arial,sans-serif}}
-    .lede{{font:400 clamp(1.05rem,1.8vw,1.3rem)/1.6 Georgia,serif;max-width:920px;color:var(--paper)}}
-    .table-wrap{{overflow:auto;border:1px solid var(--line);border-radius:10px}}
+    section{{padding:0 0 8px}} section+section{{border-top:1px solid var(--rule);margin-top:36px}}
+    h2{{margin:34px 0 12px;color:var(--ink);font:700 12px/1.4 Arial,sans-serif;letter-spacing:.15em;text-transform:uppercase}}
+    h2:after{{content:"";display:block;margin-top:10px;width:44px;border-top:2px solid var(--brand)}}
+    .subhead{{margin:24px 0 4px;color:var(--ink);font:500 1.15rem/1.3 Georgia,serif}}
+    .section-note,.quiet,.meta{{color:var(--ink3);font:.88rem/1.55 Arial,sans-serif}}
+    .lede{{font:400 clamp(1.05rem,1.8vw,1.3rem)/1.6 Georgia,serif;max-width:920px;color:var(--ink)}}
+    .table-wrap{{overflow:auto;border:1px solid var(--rule);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow)}}
     table{{width:100%;border-collapse:collapse;font:.86rem/1.5 Arial,sans-serif}}
-    th{{color:var(--mut);background:var(--panel);text-align:left;font:700 10.5px/1.4 Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase}}
-    th,td{{padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}} td{{overflow-wrap:anywhere}} tr:last-child td{{border-bottom:0}}
-    .toolbar{{position:sticky;top:0;z-index:9;display:flex;flex-wrap:wrap;gap:9px;margin:20px 0;padding:12px 14px;background:rgba(12,18,16,.94);border:1px solid var(--line);border-radius:12px}}
-    .toolbar button,.toolbar label{{border:1px solid var(--line);background:#16241e;color:var(--paper);padding:9px 13px;cursor:pointer;font:700 .78rem/1 Arial,sans-serif;border-radius:8px}}
-    .toolbar button.primary{{background:var(--gold);border-color:var(--gold);color:#171303}}
+    th{{color:var(--ink3);background:var(--lane);text-align:left;font:700 10.5px/1.4 Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase}}
+    th,td{{padding:11px 13px;border-bottom:1px solid var(--rule);vertical-align:top}} td{{overflow-wrap:anywhere}} tr:last-child td{{border-bottom:0}}
+    .toolbar{{position:sticky;top:0;z-index:9;display:flex;flex-wrap:wrap;gap:9px;margin:20px 0;padding:12px 14px;background:rgba(255,255,255,.96);border:1px solid var(--rule);border-radius:var(--radius);box-shadow:var(--shadow)}}
+    .toolbar button,.toolbar label{{border:1px solid var(--rule);background:var(--lane);color:var(--ink);padding:9px 13px;cursor:pointer;font:700 .78rem/1 Arial,sans-serif;border-radius:var(--radius)}}
+    .toolbar button.primary{{background:var(--brand);border-color:var(--brand);color:var(--action-on)}}
     .toolbar input{{position:absolute;inline-size:1px;block-size:1px;opacity:.01}}
-    .registry-item{{display:grid;grid-template-columns:118px minmax(0,1fr);gap:24px;padding:26px 0;border-top:1px solid var(--line)}}
+    .registry-item{{display:grid;grid-template-columns:118px minmax(0,1fr);gap:24px;padding:26px 0;border-top:1px solid var(--rule)}}
     .registry-item>*{{min-width:0}}
     .item-rail{{display:flex;flex-direction:column;align-items:flex-start;gap:9px}}
-    .item-id{{color:var(--gold);font:800 1.05rem/1 "Helvetica Neue",Arial,sans-serif}}
+    .item-id{{color:var(--brand);font:800 1.05rem/1 "Helvetica Neue",Arial,sans-serif}}
     .badge,.severity{{padding:5px 9px;border-radius:6px;font:800 .64rem/1 Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase}}
     .severity:before,.badge:before{{content:"●";margin-right:6px;font-size:.7em;vertical-align:1px}}
-    .severity.critical,.severity.high{{background:#3a1712;color:var(--bad)}}
-    .severity.medium{{background:#33230d;color:var(--warn)}}
-    .severity.low{{background:#122b21;color:var(--ok)}} .severity.none{{background:#132433;color:var(--blue)}}
-    .badge.open{{background:#33230d;color:var(--warn)}} .badge.needs-verification{{background:#231d3a;color:var(--violet)}}
-    .badge.fixed,.badge.cleared{{background:#122b21;color:var(--ok)}} .badge.merged,.badge.superseded{{background:#1c2420;color:var(--mut)}}
+    .severity.critical,.severity.high{{background:var(--critical-soft);color:var(--critical)}}
+    .severity.medium{{background:var(--warn-soft);color:var(--warn)}}
+    .severity.low{{background:var(--ok-soft);color:var(--ok)}} .severity.none{{background:#edf3ff;color:var(--link)}}
+    .badge.open{{background:var(--warn-soft);color:var(--warn)}} .badge.needs-verification{{background:var(--violet-soft);color:var(--violet)}}
+    .badge.fixed,.badge.cleared{{background:var(--ok-soft);color:var(--ok)}} .badge.merged,.badge.superseded{{background:var(--lane);color:var(--ink3)}}
     .item-body h3{{margin:0 0 6px;font:500 1.3rem/1.3 Georgia,serif}}
     .item-body p,.item-body li{{line-height:1.6;overflow-wrap:anywhere}}
-    .item-body h4{{margin:18px 0 4px;color:var(--mut);font:800 .68rem/1.4 Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase}}
+    .item-body h4{{margin:18px 0 4px;color:var(--ink3);font:800 .68rem/1.4 Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase}}
     .item-body ul{{margin:5px 0;padding-left:21px}}
     .item-columns{{display:grid;grid-template-columns:1fr 1fr;gap:24px}} .item-columns>*{{min-width:0}}
-    .dependency{{font:.82rem/1.5 Arial,sans-serif;color:var(--mut);overflow-wrap:anywhere}}
-    .cat-chip{{padding:5px 9px;border-radius:6px;border:1px solid var(--line);color:var(--mut);font:800 .64rem/1 Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase}}
-    .decision-row{{display:grid;grid-template-columns:170px 1fr;gap:11px;margin-top:19px;padding:15px 16px;background:#15221c;border:1px solid var(--line);border-radius:12px}}
+    .dependency{{font:.82rem/1.5 Arial,sans-serif;color:var(--ink3);overflow-wrap:anywhere}}
+    .cat-chip{{padding:5px 9px;border-radius:6px;border:1px solid var(--rule);color:var(--ink3);font:800 .64rem/1 Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase}}
+    .decision-row{{display:grid;grid-template-columns:170px 1fr;gap:11px;margin-top:19px;padding:15px 16px;background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);box-shadow:var(--shadow)}}
     .decision-row>*{{min-width:0}}
-    .decision-row label{{color:var(--mut);font:700 .72rem/1.3 Arial,sans-serif;letter-spacing:.06em;text-transform:uppercase}}
-    .decision-row select,.decision-row input{{width:100%;margin-top:5px;padding:9px;color:var(--paper);background:#101b16;border:1px solid var(--line);border-radius:8px}}
+    .decision-row label{{color:var(--ink3);font:700 .72rem/1.3 Arial,sans-serif;letter-spacing:.06em;text-transform:uppercase}}
+    .decision-row select,.decision-row input{{width:100%;margin-top:5px;padding:9px;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius)}}
     .evidence-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:18px;margin:18px 0}}
     .evidence-grid>*{{min-width:0}}
-    figure{{margin:0;min-width:0;background:#f6f3ea;border-radius:8px;padding:8px 8px 12px;box-shadow:0 16px 34px -18px rgba(0,0,0,.75)}}
+    figure{{margin:0;min-width:0;background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:8px 8px 12px;box-shadow:var(--shadow)}}
     .evidence-grid>figure:only-child{{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.7fr);gap:12px;align-items:start}}
     .evidence-grid>figure:only-child figcaption{{padding:3px 4px 0 0}}
     .evidence-image{{position:relative;overflow:hidden;background:#d8d2c2}}
     figure img{{display:block;width:100%;border:1px solid #d8d2c2}}
-    .evidence-annotation{{position:absolute;border:3px solid #ff432e;background:rgba(255,67,46,.12);box-shadow:0 0 0 1px rgba(255,255,255,.8) inset;pointer-events:none}}
-    .evidence-annotation>span{{position:absolute;left:-3px;top:-3px;max-width:min(260px,80vw);padding:4px 7px;background:#ff432e;color:#fff;font:800 10px/1.25 Arial,sans-serif;letter-spacing:.02em;white-space:normal}}
+    .evidence-annotation{{position:absolute;border:3px solid var(--brand);background:rgba(212,15,46,.12);box-shadow:0 0 0 1px rgba(255,255,255,.8) inset;pointer-events:none}}
+    .evidence-annotation>span{{position:absolute;left:-3px;top:-3px;max-width:min(260px,80vw);padding:4px 7px;background:var(--brand);color:#fff;font:800 10px/1.25 Arial,sans-serif;letter-spacing:.02em;white-space:normal}}
     figcaption{{padding:8px 3px 0;color:#26322c;font:.76rem/1.5 Arial,sans-serif;overflow-wrap:anywhere}}
     .evidence-receipt{{margin:0 0 8px;font:600 .78rem/1.45 Georgia,serif}}
     .evidence-context{{display:grid;gap:7px;margin:0}}
     .evidence-context>div{{display:grid;grid-template-columns:74px minmax(0,1fr);gap:8px;padding-top:7px;border-top:1px solid #d8d2c2}}
     .evidence-context dt{{color:#6c766f;font:800 9.5px/1.35 Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase}}
     .evidence-context dd{{margin:0;font-weight:600}}
-    .whole-frame{{margin:9px 0 0;padding:8px 9px;background:#e6ebe5;border-left:3px solid #687b70}}
+    .whole-frame{{margin:9px 0 0;padding:8px 9px;background:var(--lane);border-left:3px solid var(--brand)}}
     .status{{min-height:1.3em;color:var(--ok);font:700 .82rem/1.4 Arial,sans-serif}}
     .work-list{{counter-reset:work;list-style:none;margin:0;padding:0}}
-    .work-list>li{{counter-increment:work;display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:15px 0;border-bottom:1px solid var(--line)}}
+    .work-list>li{{counter-increment:work;display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:15px 0;border-bottom:1px solid var(--rule)}}
     .work-list>li>*{{min-width:0}}
-    .work-list>li:before{{content:counter(work,decimal-leading-zero);color:var(--gold);font:800 1rem/1.5 "Helvetica Neue",Arial,sans-serif}}
-    footer{{color:var(--mut);background:var(--panel2);border-top:1px solid var(--line)}} footer .wrap{{padding:22px 0;font:.8rem/1.5 Arial,sans-serif}}
+    .work-list>li:before{{content:counter(work,decimal-leading-zero);color:var(--brand);font:800 1rem/1.5 "Helvetica Neue",Arial,sans-serif}}
+    footer{{color:var(--ink3);background:var(--lane);border-top:1px solid var(--rule)}} footer .wrap{{padding:22px 0;font:.8rem/1.5 Arial,sans-serif}}
     [hidden]{{display:none!important}}
     @media(max-width:760px){{.mast .wrap,.registry-item,.item-columns,.decision-row,.evidence-grid>figure:only-child{{grid-template-columns:1fr}} .toolbar{{position:static}} .evidence-grid>figure:only-child figcaption{{padding:8px 3px 0}} .verdict{{max-width:none}} .registry-item{{gap:11px}} .item-rail{{flex-direction:row;align-items:center;flex-wrap:wrap}} .strip{{gap:18px}} .strip .strip-target{{margin-left:0}}}}
     @media print{{

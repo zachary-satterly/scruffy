@@ -438,6 +438,15 @@ def test_dashboard_is_self_contained_and_embeds_images(tmp=None):
     assert "Copy all choices for AI" in doc
     assert "Download decisions.json" in doc
     assert 'dec-approve' in doc                   # AS-02 is approved in the fixture
+    for brand_token in ('--paper:#e9eaec', '--surface:#fff', '--ink:#14161a',
+                        '--brand:#d40f2e', 'color-scheme:light',
+                        '<html lang="en" data-theme="light">'):
+        assert brand_token in doc, f"repair dashboard lost canonical brand token {brand_token!r}"
+    for retired_theme_marker in ('prefers-color-scheme:dark', 'data-theme=dark',
+                                 '--paper:#0e0e10', '--brand:#ff3542'):
+        assert retired_theme_marker not in doc, (
+            f"repair dashboard restored implicit theme switching {retired_theme_marker!r}"
+        )
 
 
 def test_dashboard_shows_all_items_as_a_decision_surface():

@@ -4,6 +4,11 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
+- Unified the audit and repair dashboards around the user-selected white/red
+  Scruffy interface system while preserving their distinct jobs. Removed the
+  audit dashboard's fixed green/gold screen palette and Mop's automatic
+  operating-system dark-mode switch so moving from audit to decision to
+  re-audit no longer looks like switching products.
 - Fixed Mop dashboard choice handoff: its primary action now copies both exact
   decision and direction artifacts in a paste-ready AI message, individual JSON
   downloads remain available, and direction controls cannot serialize as orphan

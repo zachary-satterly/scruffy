@@ -33,11 +33,19 @@ The product sequence is:
 The existing character and hero are the primary Scruffy imagery. Use one
 character; do not add a separate character for every workflow stage.
 
-- Flat 2D adult-animation style
-- Deep green, rust, warm gray, ochre, and neutral paper
-- Thick, clean linework
-- No gradients or pastel AI palettes
-- Saturated color only when it carries meaning
+- Product interfaces and reports use white and soft-gray paper, near-black text,
+  and Scruffy red (`#d40f2e`) as their shared identity system.
+- Red is reserved for product identity, primary actions, selected state, and
+  critical findings. Green and amber remain semantic status colors only.
+- Audit and repair dashboards may differ in information architecture, but not
+  in brand palette or theme behavior.
+- Dashboards remain light unless an explicit, user-controlled theme is designed
+  and reviewed. They do not silently follow operating-system dark mode.
+- The existing flat 2D character artwork may retain its deep green, rust, warm
+  gray, and ochre illustration palette; that artwork does not set the report
+  background or control colors.
+- Use thick, clean linework in illustration, no decorative gradients or pastel
+  AI palettes, and saturated color only when it carries meaning.
 - The root `scruffy-hero.png` is the shared product hero, including repair
   dashboards.
 

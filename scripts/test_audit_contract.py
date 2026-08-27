@@ -375,6 +375,25 @@ def main() -> int:
 
         dashboard_html = dashboard_path.read_text(encoding="utf-8")
         dashboard_reader_text = reader_text(dashboard_html)
+        for brand_token in (
+            '--paper:#e9eaec',
+            '--surface:#fff',
+            '--ink:#14161a',
+            '--brand:#d40f2e',
+            'color-scheme:light',
+            '<html lang="en" data-theme="light">',
+        ):
+            if brand_token not in dashboard_html:
+                raise AssertionError(f"audit dashboard lost the canonical white/red brand token {brand_token!r}")
+        for retired_theme_marker in (
+            '--ink:#0c1210',
+            '--gold:#e4c56a',
+            'linear-gradient(160deg',
+            'prefers-color-scheme:dark',
+            'data-theme=dark',
+        ):
+            if retired_theme_marker in dashboard_html:
+                raise AssertionError(f"audit dashboard restored retired theme behavior {retired_theme_marker!r}")
         if ".toolbar{position:static}" not in dashboard_html:
             raise AssertionError("dashboard keeps its large control toolbar sticky on narrow screens")
         for machine_term in ("AS-01", "EV-COPY", "EV-ANALYZER", "WO-01", "T1", "ASM-AUDIENCE-1", "REF-SECURITY-1", "trust_integrity", "schema-v2", "Receipts:"):
