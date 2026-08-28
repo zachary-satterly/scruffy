@@ -4,6 +4,10 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
+- Simplified the repair decision dashboard: added a safe **Approve all pending**
+  action that preserves explicit defers and rejects, placed **Copy AI handoff**
+  at both the sticky summary and end of the review, shortened the instructions,
+  and removed the stale process slogan and inert theme toggle.
 - Unified the audit and repair dashboards around the user-selected white/red
   Scruffy interface system while preserving their distinct jobs. Removed the
   audit dashboard's fixed green/gold screen palette and Mop's automatic

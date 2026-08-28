@@ -8,7 +8,10 @@ First functional release: implements approved Scruffy findings and hands them ba
 for re-audit. Not yet exercised against a real-world audit outside the fixture.
 
 ### Added
-- Made the dashboard's primary handoff a paste-ready **Copy all choices for AI**
+- Simplified the decision handoff with **Approve all pending** (without
+  overwriting defers or rejects), an end-of-review **Copy AI handoff** action,
+  shorter instructions, and removal of stale process and theme-toggle chrome.
+- Made the dashboard's primary handoff a paste-ready **Copy AI handoff**
   action containing exact `decisions.json` and `directions.json` blocks, while
   retaining separate downloads as fallback. Direction controls no longer leak
   orphan rows into `decisions.json`.

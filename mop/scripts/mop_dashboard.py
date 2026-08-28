@@ -166,11 +166,12 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
                      f'<span class="nm">{_e(cap)}</span><p>{_e(extra)}</p></div>')
         p.append('</div>')
 
-    # Decision bar — live counts + export (closes the loop).
+    # Decision bar — live counts + safe bulk decision + handoff.
     p.append(f'<div class="decbar"><div class="tchip">{_e(audit_id)}{" &middot; " + _e(target[:60]) if target else ""}</div><div class="counts">'
              '<b id="c-approve">0</b> approved &middot; <b id="c-defer">0</b> deferred &middot; '
              '<b id="c-reject">0</b> rejected &middot; <b id="c-pending">0</b> pending</div>'
-             '<div class="acts"><button id="copyAllBtn" type="button" class="primary">Copy all choices for AI</button>'
+             '<div class="acts"><button id="copyAllBtn" type="button" class="primary">Copy AI handoff</button>'
+             '<button id="approvePendingBtn" type="button">Approve all pending</button>'
              '<button id="dlBtn" type="button">Download decisions.json</button></div></div>')
 
     # Direction picker (design lanes): a human selects; recommended is advice only.
@@ -246,9 +247,7 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
                  + _e("; ".join(gate.get("reasons", []))) + '</p>')
 
     p.append(f'<section><h2>Findings &amp; decisions &mdash; {len(_ordered_items(bundle))} item(s)</h2>')
-    p.append('<p class="hint">Set each decision and design direction, then use <b>Copy all choices for AI</b> '
-             'and paste the result into your AI task. The separate JSON downloads remain available as a fallback. '
-             'Only <b>approved</b> items are implemented; re-audit evidence is required to clear them.</p>')
+    p.append('<p class="hint">Choose Approve, Defer, or Reject. Only approved items are implemented.</p>')
 
     for n, item in enumerate(_ordered_items(bundle), 1):
         iid = item["id"]
@@ -386,11 +385,15 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
         p.append('</div></article>')
     p.append('</section>')
 
+    p.append('<section class="handoff"><h2>Send choices back</h2>'
+             '<p>Copy the handoff, then paste it into your AI task.</p>'
+             '<div class="acts"><button id="copyAllBottomBtn" type="button" class="primary">Copy AI handoff</button>'
+             '<span id="handoffStatus" class="handoff-status" role="status" aria-live="polite"></span></div></section>')
+
     aug = "not reported"
     if preflight:
         aug = ", ".join(f"{k}={v.get('status')}" for k, v in preflight["augmentations"].items())
-    p.append(f'<footer><span>Scruffy&rsquo;s Mop &middot; augmentations: {_e(aug)} &middot; self-contained</span>'
-             '<span>Choose here &rarr; copy all choices for AI &rarr; Mop implements &rarr; Scruffy re-audits.</span></footer>')
+    p.append(f'<footer><span>Scruffy &middot; augmentations: {_e(aug)} &middot; self-contained</span></footer>')
     p.append('</div>')
 
     audit_meta = {
@@ -470,6 +473,7 @@ background:var(--surface);border:1px solid var(--rule);border-radius:var(--radiu
 .counts{font-size:12.5px;color:var(--ink2)}.counts b{color:var(--ink);font-variant-numeric:tabular-nums}
 .acts{display:flex;gap:8px}.acts button{font:inherit;font-size:12.5px;border:1px solid var(--rule);background:var(--lane);color:var(--ink);
 border-radius:var(--radius);padding:7px 12px;cursor:pointer}.acts button:hover{border-color:var(--ink3)}
+.acts button:disabled{cursor:default;opacity:.55;border-color:var(--rule)}
 .acts button.primary{background:var(--brand);color:var(--acton);border-color:var(--brand)}
 section{margin-top:24px}h2{font-size:15px;padding-bottom:8px;border-bottom:1px solid var(--rule);margin-bottom:8px}
 .hint{font-size:12.5px;color:var(--ink3);margin-bottom:16px}.hint b{color:var(--ink2)}
@@ -519,9 +523,12 @@ ul.evg{list-style:none;margin:8px 0 0}ul.evg li{margin-bottom:6px}
 .obadge{font-size:10px;font-weight:700;color:var(--cob);border:1px solid var(--cob);border-radius:999px;padding:1px 7px;margin-right:4px}
 .gimg{display:block;width:100%;max-height:140px;object-fit:cover;object-position:top left;border:1px solid var(--rule);border-radius:6px;margin-bottom:4px}
 .b-clear{font:inherit;font-size:12px;border:1px solid var(--rule);background:var(--surface);color:var(--ink2);border-radius:var(--radius);padding:5px 10px;cursor:pointer}
+.handoff{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.handoff h2{margin-bottom:6px}.handoff p{font-size:12.5px;color:var(--ink2);margin-bottom:12px}
+.handoff-status{align-self:center;font-size:12.5px;color:var(--ink2)}
 footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--rule);font-size:11px;color:var(--ink3);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
-.tt{position:fixed;top:14px;right:14px;z-index:20;font:inherit;font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--rule);border-radius:999px;padding:6px 12px;cursor:pointer}
-</style></head><body><button class="tt" onclick="var r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')=='dark'?'light':'dark')">Toggle theme</button>"""
+@media(max-width:720px){.decbar{position:static}.acts{width:100%;flex-wrap:wrap}.acts button{flex:1 1 auto}.handoff .acts button{flex:0 1 auto}}
+</style></head><body>"""
 
 _SCRIPT = """<script>
 (function(){
@@ -532,14 +539,20 @@ _SCRIPT = """<script>
     var c={approve:0,defer:0,reject:0,pending:0};
     decisionElements().forEach(function(el){var d=el.dataset.decision||'pending';c[d]=(c[d]||0)+1;});
     ['approve','defer','reject','pending'].forEach(function(k){var n=document.getElementById('c-'+k);if(n)n.textContent=c[k]||0;});
+    var bulk=document.getElementById('approvePendingBtn');
+    if(bulk){bulk.disabled=!c.pending;bulk.textContent=c.pending?'Approve all pending':'No pending items';}
+    return c;
+  }
+  function setDecision(el,v){
+    var pill=document.querySelector('[data-pill="'+el.dataset.itemId+'"]');
+    el.dataset.decision=v; el.className='decide dec-'+v;
+    el.querySelectorAll('.seg button').forEach(function(x){x.classList.toggle('on',x.dataset.set===v);});
+    if(pill){pill.className='dpill dpill-'+v; pill.textContent=v.charAt(0).toUpperCase()+v.slice(1);}
   }
   decisionElements().forEach(function(el){
-    var pill=document.querySelector('[data-pill="'+el.dataset.itemId+'"]');
     el.querySelectorAll('.seg button').forEach(function(b){
       b.addEventListener('click',function(){
-        var v=b.dataset.set; el.dataset.decision=v; el.className='decide dec-'+v;
-        el.querySelectorAll('.seg button').forEach(function(x){x.classList.toggle('on',x===b);});
-        if(pill){pill.className='dpill dpill-'+v; pill.textContent=v.charAt(0).toUpperCase()+v.slice(1);}
+        setDecision(el,b.dataset.set);
         refresh();
       });
     });
@@ -568,13 +581,27 @@ _SCRIPT = """<script>
       catch(err){reject(err);}finally{document.body.removeChild(area);}
     });
   }
-  var copyAllBtn=document.getElementById('copyAllBtn'), dlBtn=document.getElementById('dlBtn');
-  copyAllBtn.addEventListener('click',function(){
+  var copyButtons=[document.getElementById('copyAllBtn'),document.getElementById('copyAllBottomBtn')].filter(Boolean);
+  var handoffStatus=document.getElementById('handoffStatus');
+  function copyHandoff(){
     copyText(buildAIHandoff()).then(function(){
-      copyAllBtn.textContent='Copied for AI \\u2713';
-      setTimeout(function(){copyAllBtn.textContent='Copy all choices for AI';},1600);
-    }).catch(function(){copyAllBtn.textContent='Copy failed — use JSON downloads';});
+      copyButtons.forEach(function(btn){btn.textContent='Copied \\u2713';});
+      if(handoffStatus)handoffStatus.textContent='Copied. Paste it into your AI task.';
+      setTimeout(function(){copyButtons.forEach(function(btn){btn.textContent='Copy AI handoff';});},1600);
+    }).catch(function(){if(handoffStatus)handoffStatus.textContent='Copy failed. Use the JSON downloads.';});
+  }
+  copyButtons.forEach(function(btn){btn.addEventListener('click',copyHandoff);});
+  var approvePendingBtn=document.getElementById('approvePendingBtn');
+  if(approvePendingBtn)approvePendingBtn.addEventListener('click',function(){
+    var changed=0;
+    decisionElements().forEach(function(el){
+      if((el.dataset.decision||'pending')!=='pending')return;
+      setDecision(el,'approve');changed+=1;
+    });
+    refresh();
+    if(handoffStatus)handoffStatus.textContent=changed?'Approved '+changed+' pending item'+(changed===1?'':'s')+'.':'Nothing was pending.';
   });
+  var dlBtn=document.getElementById('dlBtn');
   dlBtn.addEventListener('click',function(){
     var b=new Blob([build()],{type:'application/json'}); var u=URL.createObjectURL(b);
     var a=document.createElement('a'); a.href=u; a.download='decisions.json'; document.body.appendChild(a); a.click();

@@ -435,7 +435,8 @@ def test_dashboard_is_self_contained_and_embeds_images(tmp=None):
     assert "Recommended direction" in doc        # direction overlay rendered
     # Decision surface: controls + export present, decision reflects the bundle.
     assert 'data-item-id="AS-02"' in doc
-    assert "Copy all choices for AI" in doc
+    assert "Copy AI handoff" in doc
+    assert "Approve all pending" in doc
     assert "Download decisions.json" in doc
     assert 'dec-approve' in doc                   # AS-02 is approved in the fixture
     for brand_token in ('--paper:#e9eaec', '--surface:#fff', '--ink:#14161a',
@@ -462,7 +463,25 @@ def test_dashboard_shows_all_items_as_a_decision_surface():
     assert 'dec-defer' in doc and 'dec-reject' in doc and 'dec-approve' in doc
     assert 'id="dlBtn"' in doc and "decisions.json" in doc
     assert 'id="copyAllBtn"' in doc
+    assert 'id="copyAllBottomBtn"' in doc
+    assert 'id="approvePendingBtn"' in doc
+    assert 'id="handoffStatus"' in doc
     assert 'data-decision=' in doc                # in-browser decision state
+    assert "Choose here &rarr;" not in doc
+    assert "Mop implements" not in doc
+    assert "Toggle theme" not in doc
+    assert ".tt{" not in doc
+
+
+def test_dashboard_bulk_approval_changes_only_pending_items():
+    import tempfile
+    from mop_dashboard import render
+    with tempfile.TemporaryDirectory() as d:
+        out = render(FIXTURE, None, str(Path(d) / "dash.html"), authorized=True)
+        doc = out.read_text()
+    assert "if((el.dataset.decision||'pending')!=='pending')return;" in doc
+    assert "setDecision(el,'approve');changed+=1;" in doc
+    assert "Approved '+changed+' pending item" in doc
 
 
 def test_dashboard_exports_only_real_decisions_and_copies_both_artifacts_for_ai():
@@ -484,7 +503,7 @@ def test_dashboard_exports_only_real_decisions_and_copies_both_artifacts_for_ai(
     assert "buildAIHandoff" in html
     assert "'decisions.json', '```json'" in html
     assert "'directions.json', '```json'" in html
-    assert "Copy failed — use JSON downloads" in html
+    assert "Copy failed. Use the JSON downloads." in html
 
 
 def test_dashboard_unknown_mime_fails_closed():
@@ -695,7 +714,7 @@ def test_dashboard_renders_direction_picker_and_export():
         out = render(d, None, str(d / "dash.html"), authorized=True)
         html = out.read_text()
     assert "Design directions" in html
-    assert "Copy all choices for AI" in html
+    assert "Copy AI handoff" in html
     assert "Download directions.json" in html
     assert 'data-group-id="GRP-1"' in html
     assert html.count('type="radio"') >= 3
