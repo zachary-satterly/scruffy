@@ -33,6 +33,14 @@ Chat-only work emits the same registry as a JSON block when files are unavailabl
 
 Every registry item must be present in the Markdown report and HTML dashboard. Collapsing resolved items is allowed; omission is not.
 
+Interactive controls follow lifecycle, not merely the presence of a durable
+decision row. Only open and needs-verification findings or enhancements may
+offer approve, defer, reject, bulk-approval, or design-direction controls.
+Fixed, cleared, merged, and superseded items retain their complete decision
+history in exports and remain visible in the resolved section, but render as
+read-only lifecycle history. A prior `approve` value never makes a terminal
+item actionable again.
+
 ## Registry and run receipt
 
 New audits emit registry schema `2.1`. Schema `2.0` remains readable for revision durability, but it is not a template for new reports. Mode names and authority rules come only from [audit-contract.md](audit-contract.md); categories and facets come only from [taxonomy.md](taxonomy.md).
@@ -348,7 +356,8 @@ Include:
 - Every registry item, keyed by immutable ID
 - Filterable status/kind/severity views
 - Evidence and acceptance checks without hover dependence
-- Approve/defer/reject plus notes for findings and enhancements
+- Approve/defer/reject plus notes for open or needs-verification findings and enhancements
+- Read-only lifecycle state and preserved prior decisions for terminal items
 - Copy/download of schema-v2 decisions and findings
 - Prior-decision import or explicit migration instructions
 - Print-friendly styling and keyboard-operable controls

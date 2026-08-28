@@ -73,10 +73,13 @@ and one self-contained `mop-dashboard.html`. The filenames are stable machine
 interfaces, not product names.
 
 The dashboard's **Approve all pending** action changes only pending rows; it does
-not overwrite an explicit defer or reject. **Copy AI handoff** appears in the
-sticky decision bar and after the final finding, and produces one paste-ready
-message with exact `decisions.json` and `directions.json` blocks. Separate JSON
-downloads remain available as a fallback.
+not overwrite an explicit defer or reject. It also excludes fixed, cleared,
+merged, and superseded rows. Those items remain visible and exportable as
+read-only history, labeled by lifecycle status rather than their old approval.
+Their completed design groups are retired from the picker. **Copy AI handoff**
+appears in the sticky decision bar and after the final finding, and produces one
+paste-ready message with exact `decisions.json` and active `directions.json`
+blocks. Separate JSON downloads remain available as a fallback.
 
 The underlying tools remain available individually through `mop_bundle.py`,
 `mop_preflight.py`, `mop_directions.py`, `mop_dashboard.py`, and

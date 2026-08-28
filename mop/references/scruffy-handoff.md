@@ -37,7 +37,9 @@ For current context schema 1.2, version acceptance is not enough. Bundle loading
    mode with `source_write` capability. Fail closed otherwise. An audit or a
    dashboard decision alone is not source-edit authorization.
 2. **Approval.** Only `approve`d decisions are actioned. `pending`, `defer`, and
-   `reject` are never implemented.
+   `reject` are never implemented. A fixed, cleared, merged, or superseded item
+   is terminal regardless of its preserved prior decision: show it as history,
+   never as an approval or design-direction control.
 3. **Dependency order.** Follow Scruffy's work-order order: structural blockers →
    routing/data/state → semantic and interaction primitives → visual tokens and
    responsive composition → page cleanup → verification.

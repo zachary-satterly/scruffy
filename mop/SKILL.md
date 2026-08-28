@@ -29,10 +29,13 @@ disclosed, never assumed), a validated or freshly scaffolded `directions.json`
 template/screenshot imagery attached when the runtime has it), and
 `mop-dashboard.html` — the self-contained picker the human uses to select
 directions and approve items. **Approve all pending** changes only untouched
-pending items and preserves every explicit defer or reject. **Copy AI handoff**
-is available both in the sticky decision bar and after the final finding; it
-copies a paste-ready message containing both `decisions.json` and
-`directions.json`. Separate JSON downloads remain available as fallback.
+pending items and preserves every explicit defer or reject. Fixed, cleared,
+merged, and superseded items stay visible as read-only history: their prior
+decisions remain in the exported artifact, but they have no approval or design-
+direction controls and never enter the active counts. **Copy AI handoff** is
+available both in the sticky decision bar and after the final finding; it copies
+a paste-ready message containing both `decisions.json` and `directions.json`.
+Separate JSON downloads remain available as fallback.
 Implementation begins only after the human's
 exported selections pass `mop_directions.py check`; a visual direction without
 an image anchor cannot be selected, and text-only design advice fails closed.

@@ -8,6 +8,10 @@ First functional release: implements approved Scruffy findings and hands them ba
 for re-audit. Not yet exercised against a real-world audit outside the fixture.
 
 ### Added
+- Retired terminal work from repair controls: fixed, cleared, merged, and
+  superseded items now show lifecycle status and preserved decision history
+  without approval controls, active counts, bulk approval, or stale design
+  directions. Durable exports remain lossless.
 - Simplified the decision handoff with **Approve all pending** (without
   overwriting defers or rejects), an end-of-review **Copy AI handoff** action,
   shorter instructions, and removal of stale process and theme-toggle chrome.

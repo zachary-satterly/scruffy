@@ -45,10 +45,13 @@ the gap — never hand-edit the bundle to make it parse.
 
 When using `mop-dashboard.html`, set decisions and design directions. **Approve
 all pending** is a safe bulk action: it leaves explicit defer and reject choices
-unchanged. Then use **Copy AI handoff** in the sticky decision bar or after the
-final finding and paste the generated message into the AI task. It contains
-exact fenced JSON for `decisions.json` and, when directions exist,
-`directions.json`. Individual JSON downloads remain available as a fallback.
+unchanged and never includes a fixed, cleared, merged, or superseded item.
+Terminal items and their prior decisions remain visible and exportable as
+read-only history; completed direction groups are not offered again. Then use
+**Copy AI handoff** in the sticky decision bar or after the final finding and
+paste the generated message into the AI task. It contains exact fenced JSON for
+`decisions.json` and, when active directions exist, `directions.json`.
+Individual JSON downloads remain available as a fallback.
 
 ## 3. Build the plan
 

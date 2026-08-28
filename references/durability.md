@@ -71,7 +71,10 @@ Show at most eight prioritized findings and five prioritized enhancements in the
 - All strengths
 - A revision reconciliation table
 
-Collapsed presentation is allowed; absent registry items are not.
+Collapsed presentation is allowed; absent registry items are not. Terminal
+items are durable history, not a new decision queue: preserve their prior
+decisions in exports, but never render approval, bulk-action, or direction
+controls for them.
 
 ## Validation
 

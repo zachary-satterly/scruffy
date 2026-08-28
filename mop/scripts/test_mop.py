@@ -450,7 +450,7 @@ def test_dashboard_is_self_contained_and_embeds_images(tmp=None):
         )
 
 
-def test_dashboard_shows_all_items_as_a_decision_surface():
+def test_dashboard_shows_all_items_and_active_decisions():
     import tempfile
     from mop_dashboard import render
     with tempfile.TemporaryDirectory() as d:
@@ -471,6 +471,42 @@ def test_dashboard_shows_all_items_as_a_decision_surface():
     assert "Mop implements" not in doc
     assert "Toggle theme" not in doc
     assert ".tt{" not in doc
+
+
+def test_dashboard_terminal_items_are_read_only_history_and_survive_export():
+    from mop_dashboard import build_dashboard_html
+    b, plan = _plan()
+    terminal_ids = []
+    for status, item in zip(("fixed", "cleared", "merged", "superseded"), b["findings"]["items"][:4]):
+        item["status"] = status
+        terminal_ids.append(item["id"])
+    html = build_dashboard_html(b, plan, {}, FIXTURE)
+    for item_id, status in zip(terminal_ids, ("Fixed", "Cleared", "Merged", "Superseded")):
+        assert f'data-history-item-id="{item_id}"' in html
+        assert f'data-registry-item-id="{item_id}"' in html
+        assert status in html
+        assert f'data-item-id="{item_id}"' not in html
+        assert f'"item_id": "{item_id}"' in html
+    active_id = b["findings"]["items"][4]["id"]
+    assert f'data-item-id="{active_id}"' in html
+    assert "var INITIAL_DECISIONS =" in html
+    assert "var doc=JSON.parse(JSON.stringify(INITIAL_DECISIONS));" in html
+
+
+def test_dashboard_hides_direction_groups_when_every_item_is_settled():
+    from mop_dashboard import _active_direction_doc
+    findings = {"items": [
+        {"id": "DONE-1", "kind": "finding", "status": "fixed"},
+        {"id": "LIVE-1", "kind": "finding", "status": "open"},
+    ]}
+    directions = {"schema_version": "1.1", "groups": [
+        {"id": "GRP-DONE", "item_ids": ["DONE-1"], "directions": []},
+        {"id": "GRP-MIXED", "item_ids": ["DONE-1", "LIVE-1"], "directions": []},
+    ]}
+    filtered = _active_direction_doc(directions, findings)
+    assert [group["id"] for group in filtered["groups"]] == ["GRP-MIXED"]
+    assert filtered["groups"][0]["item_ids"] == ["LIVE-1"]
+    assert directions["groups"][1]["item_ids"] == ["DONE-1", "LIVE-1"]
 
 
 def test_dashboard_bulk_approval_changes_only_pending_items():

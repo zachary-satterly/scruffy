@@ -9,7 +9,8 @@ where they can see evidence and act on it. It must therefore be one file with
 every image embedded as a ``data:`` URI — no sibling folder, no external fetch,
 no login-gated link needed to render — and it must let the operator **close the
 loop**: review every Scruffy finding beside the recommended direction,
-Approve / Defer / Reject each in-browser, and export an updated ``decisions.json``
+Approve / Defer / Reject each active item in-browser, retain terminal items as
+read-only history, and export an updated ``decisions.json``
 (schema 2.1) that feeds straight back into ``mop_bundle.py`` / ``mop_dashboard.py``.
 
 All interaction is client-side JS embedded in the file (no server): the decision
@@ -24,12 +25,13 @@ from __future__ import annotations
 
 import argparse
 import base64
+import copy
 import html
 import json
 import sys
 from pathlib import Path
 
-from mop_bundle import InteropError, build_plan, load_bundle, load_interop
+from mop_bundle import TERMINAL_STATUSES, InteropError, build_plan, load_bundle, load_interop
 
 # ASSETS SCHEMA (JSON) — same as before:
 # {
@@ -46,6 +48,14 @@ _MIME_BY_EXT = {
 _DECISIONS = ("approve", "defer", "reject", "pending")
 _DECISION_LABEL = {"approve": "Approve", "defer": "Defer", "reject": "Reject", "pending": "Pending"}
 _ACTIONABLE_KINDS = ("finding", "enhancement")
+_STATUS_LABEL = {
+    "open": "Open",
+    "needs-verification": "Needs verification",
+    "fixed": "Fixed",
+    "cleared": "Cleared",
+    "merged": "Merged",
+    "superseded": "Superseded",
+}
 
 
 # Scruffy's public category labels (schema/taxonomy.json is canonical; display copy only).
@@ -128,6 +138,28 @@ def _ordered_items(bundle: dict) -> list[dict]:
     return [items[i] for i in order]
 
 
+def _is_actionable(item: dict) -> bool:
+    return item.get("kind", "finding") in _ACTIONABLE_KINDS and item.get("status") not in TERMINAL_STATUSES
+
+
+def _active_direction_doc(direction_doc: dict | None, findings: dict) -> dict | None:
+    """Return only direction groups that still contain actionable registry items."""
+    if not direction_doc:
+        return None
+    items = {item["id"]: item for item in findings.get("items", [])}
+    active_ids = {item_id for item_id, item in items.items() if _is_actionable(item)}
+    filtered = copy.deepcopy(direction_doc)
+    groups = []
+    for group in filtered.get("groups", []):
+        item_ids = [item_id for item_id in group.get("item_ids", []) if item_id in active_ids]
+        if not item_ids:
+            continue
+        group["item_ids"] = item_ids
+        groups.append(group)
+    filtered["groups"] = groups
+    return filtered if groups else None
+
+
 def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, direction_doc: dict | None = None, bundle_base: Path | None = None, demo_note: str | None = None) -> str:
     findings = bundle["findings"]
     decisions = {d["item_id"]: d for d in bundle["decisions"].get("decisions", [])}
@@ -138,6 +170,11 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
     screenshots = assets.get("screenshots", [])
     references = assets.get("references", [])
     directions = assets.get("directions", {})
+    ordered_items = _ordered_items(bundle)
+    settled_count = sum(
+        1 for item in ordered_items
+        if item.get("kind", "finding") in _ACTIONABLE_KINDS and item.get("status") in TERMINAL_STATUSES
+    )
     shot_uri = {s["path"]: _data_uri(base / s["path"], s.get("mime")) for s in screenshots}
     ref_uri = {r["path"]: _data_uri(base / r["path"], r.get("mime")) for r in references}
 
@@ -167,9 +204,9 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
         p.append('</div>')
 
     # Decision bar — live counts + safe bulk decision + handoff.
-    p.append(f'<div class="decbar"><div class="tchip">{_e(audit_id)}{" &middot; " + _e(target[:60]) if target else ""}</div><div class="counts">'
+    p.append(f'<div class="decbar"><div class="tchip">{_e(audit_id)}{" &middot; " + _e(target[:60]) if target else ""}</div><div class="counts"><span>Active queue:</span> '
              '<b id="c-approve">0</b> approved &middot; <b id="c-defer">0</b> deferred &middot; '
-             '<b id="c-reject">0</b> rejected &middot; <b id="c-pending">0</b> pending</div>'
+             f'<b id="c-reject">0</b> rejected &middot; <b id="c-pending">0</b> pending &middot; <b>{settled_count}</b> settled</div>'
              '<div class="acts"><button id="copyAllBtn" type="button" class="primary">Copy AI handoff</button>'
              '<button id="approvePendingBtn" type="button">Approve all pending</button>'
              '<button id="dlBtn" type="button">Download decisions.json</button></div></div>')
@@ -246,27 +283,31 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
         p.append('<p class="blocked">Authority BLOCKED — advisory only: '
                  + _e("; ".join(gate.get("reasons", []))) + '</p>')
 
-    p.append(f'<section><h2>Findings &amp; decisions &mdash; {len(_ordered_items(bundle))} item(s)</h2>')
-    p.append('<p class="hint">Choose Approve, Defer, or Reject. Only approved items are implemented.</p>')
+    p.append(f'<section><h2>Findings &amp; decisions &mdash; {len(ordered_items)} item(s)</h2>')
+    p.append('<p class="hint">Choose Approve, Defer, or Reject for active items. Fixed, cleared, merged, and superseded items remain visible as read-only history.</p>')
 
-    for n, item in enumerate(_ordered_items(bundle), 1):
+    for n, item in enumerate(ordered_items, 1):
         iid = item["id"]
         kind = item.get("kind", "finding")
         cur = decisions.get(iid, {}).get("decision", "pending")
         if cur not in _DECISIONS:
             cur = "pending"
         note = decisions.get(iid, {}).get("note", "")
+        actionable = _is_actionable(item)
+        status = item.get("status", "open")
         d = directions.get(iid)
         item_shots = [s for s in screenshots if iid in (s.get("item_ids") or [])]
         item_refs = [r for r in references if iid in (r.get("for_items") or [])]
 
-        p.append(f'<article class="item kind-{_e(kind)}">')
+        badge_text = _DECISION_LABEL[cur] if actionable else ("Strength" if kind == "strength" else _STATUS_LABEL.get(status, status.replace("-", " ").title()))
+        badge_class = cur if actionable else ("settled" if status in TERMINAL_STATUSES else "history")
+        p.append(f'<article class="item kind-{_e(kind)}{" item-settled" if status in TERMINAL_STATUSES else ""}" data-registry-item-id="{_e(iid)}">')
         p.append(f'<div class="ihead"><span class="rank">{n}</span><div class="ttl">'
                  f'<h3>{_e(item.get("title"))}</h3>'
                  f'<p class="meta">{_e(kind)} &middot; <b class="cat">{_e(category_label(item.get("category")))}</b> &middot; '
                  f'{_e(item.get("severity"))} severity &middot; {_e(item.get("confidence"))} confidence &middot; '
-                 f'<code>{_e(iid)}</code></p></div>'
-                 f'<span class="dpill dpill-{cur}" data-pill="{iid}">{_DECISION_LABEL[cur]}</span></div>')
+                 f'{_e(_STATUS_LABEL.get(status, status.replace("-", " ").title()))} &middot; <code>{_e(iid)}</code></p></div>'
+                 f'<span class="dpill dpill-{badge_class}" data-pill="{iid}">{_e(badge_text)}</span></div>')
         p.append(f'<div class="tabs" role="tablist"><button class="tab on" data-tab="finding" data-for="{_e(iid)}">Finding</button>'
                  f'<button class="tab" data-tab="provenance" data-for="{_e(iid)}">Provenance</button></div>')
         p.append(f'<div class="ibody tabpane on" data-pane="finding" data-for="{_e(iid)}">')
@@ -340,8 +381,9 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
                          f'<figcaption><b>{app}</b>{note_r}{link}</figcaption></figure>')
             p.append('</div>')
 
-        # Decision control (only real decisions get one).
-        if kind in _ACTIONABLE_KINDS:
+        # Active findings/enhancements get controls. Terminal rows retain their
+        # prior choice as history but can never be re-approved from this surface.
+        if actionable:
             p.append(f'<div class="decide dec-{cur}" data-item-id="{iid}" data-decision="{cur}">')
             p.append('<div class="seg" role="group" aria-label="decision">')
             for opt in ("approve", "defer", "reject"):
@@ -350,6 +392,11 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
             p.append('</div>')
             p.append(f'<input class="note" type="text" placeholder="note (optional)" value="{_e(note)}">')
             p.append('</div>')
+        elif kind in _ACTIONABLE_KINDS and status in TERMINAL_STATUSES:
+            history_note = f' &middot; {_e(note)}' if note else ""
+            p.append(f'<div class="decision-history" data-history-item-id="{_e(iid)}">'
+                     f'<b>{_e(_STATUS_LABEL.get(status, status.title()))}</b> &middot; '
+                     f'prior decision: {_e(_DECISION_LABEL[cur])}{history_note}</div>')
         p.append('</div>')
 
         # Provenance pane: Source → Rule → Detector pack → Signal → Evidence, standardized.
@@ -405,6 +452,8 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
     p.append(
         _SCRIPT.replace("__AUDIT__", json.dumps(audit_meta)).replace(
             "__DIRECTIONS__", json.dumps(direction_doc) if direction_doc else "null"
+        ).replace(
+            "__DECISIONS__", json.dumps(bundle["decisions"])
         )
     )
     p.append(_TAIL)
@@ -437,6 +486,7 @@ def render(
     direction_doc = (
         json.loads(directions_path.read_text(encoding="utf-8")) if directions_path.exists() else None
     )
+    direction_doc = _active_direction_doc(direction_doc, bundle["findings"])
     demo_note = None
     fixture_markers = ("fixtures", "sample-audit")
     if any(marker in str(Path(bundle_dir).resolve()).lower() for marker in fixture_markers) or assets.get("demo_note"):
@@ -493,6 +543,8 @@ figure.shot img{display:block;width:100%;height:auto}figure.shot figcaption{font
 .dpill-approve{color:var(--ok);background:var(--ok-soft);border-color:transparent}
 .dpill-defer{color:var(--warn);background:var(--warn-soft);border-color:transparent}
 .dpill-reject{color:var(--brand);background:var(--crit);border-color:transparent}
+.dpill-settled{color:var(--ok);background:var(--ok-soft);border-color:transparent}.dpill-history{color:var(--ink2);background:var(--lane)}
+.item-settled{box-shadow:none}.item-settled .rank{background:var(--ink3)}
 .ibody{padding:14px 16px}
 .tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--rule);background:var(--lane)}
 .tab{font:inherit;font-size:12.5px;font-weight:600;color:var(--ink3);background:none;border:0;border-bottom:2px solid transparent;padding:9px 12px;cursor:pointer}
@@ -514,6 +566,8 @@ figure.shot img{display:block;width:100%;height:auto}figure.shot figcaption{font
 .seg .b-approve.on{background:var(--ok);color:#fff}.seg .b-defer.on{background:var(--warn);color:#fff}.seg .b-reject.on{background:var(--brand);color:var(--acton)}
 .note{flex:1;min-width:160px;font:inherit;font-size:12.5px;border:1px solid var(--rule);border-radius:var(--radius);background:var(--paper);color:var(--ink);padding:7px 10px}
 .note:focus{outline:2px solid var(--cob);outline-offset:1px}
+.decision-history{margin-top:14px;padding-top:14px;border-top:1px dashed var(--rule);font-size:12.5px;color:var(--ink2)}
+.decision-history b{color:var(--ok)}
 .dirs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:8px}
 label.dir{display:block;border:1px solid var(--rule);border-radius:var(--radius);background:var(--lane);padding:12px;cursor:pointer}
 label.dir:hover{border-color:var(--ink3)}label.dir.on{border-color:var(--cob);outline:2px solid var(--cob);outline-offset:-1px}
@@ -534,6 +588,7 @@ _SCRIPT = """<script>
 (function(){
   var AUDIT = __AUDIT__;
   var DIRECTIONS = __DIRECTIONS__;
+  var INITIAL_DECISIONS = __DECISIONS__;
   function decisionElements(){return document.querySelectorAll('.decide[data-item-id]');}
   function refresh(){
     var c={approve:0,defer:0,reject:0,pending:0};
@@ -558,16 +613,17 @@ _SCRIPT = """<script>
     });
   });
   function build(){
-    var decisions=[].map.call(decisionElements(),function(el){
-      return {item_id:el.dataset.itemId, decision:el.dataset.decision||'pending',
-        note:(el.querySelector('.note')||{}).value||'', updated_at:new Date().toISOString(),
-        decision_source:'current', destination_id:null, history:[]};
+    var doc=JSON.parse(JSON.stringify(INITIAL_DECISIONS));
+    var byId={};(doc.decisions||[]).forEach(function(row){byId[row.item_id]=row;});
+    decisionElements().forEach(function(el){
+      var row=byId[el.dataset.itemId];
+      if(!row){row={item_id:el.dataset.itemId,decision:'pending',note:'',updated_at:null,decision_source:'current',destination_id:null,history:[]};doc.decisions.push(row);byId[row.item_id]=row;}
+      row.decision=el.dataset.decision||'pending';row.note=(el.querySelector('.note')||{}).value||'';row.updated_at=new Date().toISOString();
     });
-    return JSON.stringify({schema_version:AUDIT.schema_version||'2.1', audit_id:AUDIT.audit_id,
-      revision_id:AUDIT.revision_id, baseline_revision_id:AUDIT.baseline_revision_id||null, decisions:decisions}, null, 2);
+    return JSON.stringify(doc,null,2);
   }
   function buildAIHandoff(){
-    var parts=['Apply these exact Scruffy repair choices for audit '+AUDIT.audit_id+' at revision '+AUDIT.revision_id+'.',
+    var parts=['Use these exact Scruffy repair choices and preserved decision history for audit '+AUDIT.audit_id+' at revision '+AUDIT.revision_id+'.',
       '', 'decisions.json', '```json', build(), '```'];
     if(DIRECTIONS){parts.push('', 'directions.json', '```json', JSON.stringify(DIRECTIONS,null,2), '```');}
     return parts.join('\\n');

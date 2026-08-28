@@ -96,7 +96,7 @@ def main(argv=None) -> int:
     for note in notes:
         print(f"    note: {note}")
     print(f"  dashboard: {out}")
-    print("Next: pick directions and decisions in the dashboard, export the JSON files, "
+    print("Next: pick directions and decisions for active items in the dashboard, export the JSON files, "
           "then implement selected work and hand off via mop_handoff.py.")
     return 0
 

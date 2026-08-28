@@ -4,6 +4,10 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
+- Prevented completed work from reappearing as a repair queue. Audit and repair
+  decision surfaces now reserve controls for open or needs-verification items;
+  fixed, cleared, merged, and superseded items remain visible and exportable as
+  read-only lifecycle history, and completed design-direction groups are retired.
 - Simplified the repair decision dashboard: added a safe **Approve all pending**
   action that preserves explicit defers and rejects, placed **Copy AI handoff**
   at both the sticky summary and end of the review, shortened the instructions,

@@ -12,7 +12,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from audit_contract import load_contract
-from render_dashboard import render as render_dashboard
+from render_dashboard import decision_control, render as render_dashboard
 from render_markdown import render as render_markdown
 from report_contract import humanize_text
 from taxonomy_contract import load_taxonomy
@@ -313,6 +313,14 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="scruffy-contract-") as directory:
         base = Path(directory)
         registry, context = build_fixture(base)
+        active_control = decision_control(registry["items"][0], {"decision": "approve", "note": "repair it"})
+        if 'data-decision-for="AS-01"' not in active_control:
+            raise AssertionError("active audit finding lost its decision control")
+        for terminal_status in ("fixed", "cleared", "merged", "superseded"):
+            terminal_item = copy.deepcopy(registry["items"][0])
+            terminal_item["status"] = terminal_status
+            if decision_control(terminal_item, {"decision": "approve"}):
+                raise AssertionError(f"{terminal_status} audit history was rendered as actionable")
         validate_registry(registry)
         validate_context(context, registry, base_path=base)
         decisions = {

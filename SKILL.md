@@ -163,6 +163,13 @@ When files and an interactive viewer are available, also produce:
 - `decisions.json` using stable item IDs, revision lineage, approve/defer/reject states, and history
 - `tokens.json` when token changes are proposed
 
+Decision surfaces distinguish current work from durable history. Only open or
+needs-verification findings and enhancements may expose approve, defer, reject,
+bulk-approval, or design-direction controls. Fixed, cleared, merged, and
+superseded items remain visible and exportable with their prior decisions, but
+must be read-only and labeled by lifecycle status so completed work never looks
+like a new repair queue.
+
 For a blind run, also produce `blind-manifest.json`, `blind-discovery.json`, and `blind-freeze.json`; add `blind-reconciliation.json` only after the reveal phase. State whether blindness was verified, contaminated, or not run.
 
 Artifacts follow capability, not judgement. When `source_write` is available, `findings.json`, `context.json`, `decisions.json` and the Markdown report are **required**; none of them needs a viewer. The HTML dashboard is required whenever files can be written at all, since it is a file. An artifact that was not produced is named with the capability that prevented it, never omitted silently — a missing artifact and one nobody thought about look identical otherwise.
