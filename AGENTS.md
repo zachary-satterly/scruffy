@@ -6,6 +6,9 @@ Agent Skills-compatible runtimes. This file governs work **on Scruffy itself**;
 it is not a second copy of the audit method. Claude Code imports this contract
 through root `CLAUDE.md`.
 
+Canonical public repository: `https://github.com/zachary-satterly/scruffy`.
+`ur-passwd-hash` is the former GitHub username; do not use it for current routing.
+
 ## Start here
 
 1. Classify the request as `USE`, `MAINTAIN`, or `BLIND FORWARD TEST`.

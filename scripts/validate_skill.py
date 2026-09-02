@@ -339,7 +339,7 @@ def validate_claude_metadata() -> None:
     version = plugin.get("version")
     if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
         fail(".claude-plugin/plugin.json version must use semantic versioning")
-    if plugin.get("repository") != "https://github.com/ur-passwd-hash/scruffy":
+    if plugin.get("repository") != "https://github.com/zachary-satterly/scruffy":
         fail(".claude-plugin/plugin.json repository must identify the public Scruffy repository")
 
     if marketplace.get("name") != "scruffy-marketplace":
@@ -360,10 +360,16 @@ def validate_claude_metadata() -> None:
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version} —" not in changelog:
         fail("Claude plugin version must have a matching CHANGELOG.md release heading")
+    releases = re.findall(r"^## (\d+\.\d+\.\d+) —", changelog, flags=re.MULTILINE)
+    if not releases or releases[0] != version:
+        fail(
+            "Newest CHANGELOG.md release heading must equal the plugin version; "
+            f"found {releases[0] if releases else 'none'} vs {version}"
+        )
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     required_readme_fragments = (
-        "/plugin marketplace add ur-passwd-hash/scruffy",
+        "/plugin marketplace add zachary-satterly/scruffy",
         "/plugin install scruffy@scruffy-marketplace",
         "/scruffy:scruffy",
         "/scruffy",
@@ -379,7 +385,7 @@ def validate_public_brand() -> None:
     required = (
         '<h1 align="center">Scruffy</h1>',
         "assets/scruffy-hero.png",
-        "https://github.com/ur-passwd-hash/scruffy",
+        "https://github.com/zachary-satterly/scruffy",
         "Scruffy finds AI slop in web apps",
         "What “AI slop” means here",
         "does not guess whether AI wrote the app",

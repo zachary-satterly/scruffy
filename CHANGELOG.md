@@ -4,6 +4,14 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
+_No unreleased changes._
+
+## 3.0.1 — 2026-09-02
+
+- Release cut so installers stop delivering 2.3.1/3.0.0 while `main` carries the
+  changes below. `validate_skill.py` now requires the newest CHANGELOG release
+  heading to equal the plugin version.
+
 - Prevented completed work from reappearing as a repair queue. Audit and repair
   decision surfaces now reserve controls for open or needs-verification items;
   fixed, cleared, merged, and superseded items remain visible and exportable as

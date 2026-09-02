@@ -2,7 +2,7 @@
 
 Target: `README.md`
 
-Target SHA-256: `7bf91f6f18e86055564fed5fe096f1592b89add8a324b817e9cd4050748ca949`
+Target SHA-256: `1752334d63fb24b8be0ea9103f3fa7c90f5e52b0cf4272312a921b467e62d31a`
 
 Command:
 
@@ -172,3 +172,28 @@ Manual passes rechecked the new paragraph and its surrounding task section:
 
 **Cleared:** no active editorial-slop finding in the current README. This refresh
 binds the badge to the changed file and makes no authorship assessment.
+
+## Refresh — 2026-08-25 (GitHub owner renamed)
+
+Prior target hash `7bf91f6f18e86055564fed5fe096f1592b89add8a324b817e9cd4050748ca949`;
+current `1752334d63fb24b8be0ea9103f3fa7c90f5e52b0cf4272312a921b467e62d31a`.
+
+The README changes only replace the former GitHub owner `ur-passwd-hash` with
+the authenticated current owner `zachary-satterly` in the workflow badge and
+public Claude/Codex install commands. No product claim, workflow, taxonomy,
+authority, or invocation contract changed.
+
+The English prose analyzer was rerun on the complete README. It remains at
+3,838 source words, 2,073 reader-facing words, 187 sentences, 111 specificity
+markers, zero formulaic scaffolds, and `finding_eligible: false`. The unchanged
+lead set remains `clause_pileup`, `overlong_sentence`,
+`paragraph_pattern_reuse`, and `repeated_openings`; URL destinations and code
+commands are excluded from prose statistics.
+
+Manual review of the changed lines found no coherence, portability, discourse,
+voice, terminology, provenance, action, recovery, or audience-fit change beyond
+making the public repository destinations accurate and directly usable.
+
+**Cleared:** no active editorial-slop finding in the current README. This
+refresh reconciles the hash after the verified GitHub rename and makes no
+authorship assessment.
