@@ -4,6 +4,12 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
+- Reconciled Jon Yablonski's *Laws of UX* into the corpus as `principles/PRINCIPLES.md` §34:
+  seven laws admitted as observable audit predicates or weighting rules with explicit
+  false-positive guards (Hick, Miller, Jakob, Von Restorff, Doherty, common region/uniform
+  connectedness, peak-end), the previously overclaimed `[LawsUX]` source row corrected to
+  point at the section, and the remaining popular laws recorded as not admitted, with
+  reasons, so they are not re-litigated.
 - Prevented completed work from reappearing as a repair queue. Audit and repair
   decision surfaces now reserve controls for open or needs-verification items;
   fixed, cleared, merged, and superseded items remain visible and exportable as
