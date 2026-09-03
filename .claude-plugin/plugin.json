@@ -1,12 +1,12 @@
 {
   "name": "scruffy",
   "description": "Find and fix AI slop in web apps with evidence-backed audits of product logic, interaction, design, editorial quality, accessibility, implementation, and performance.",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "author": {
     "name": "Zachary Satterly",
-    "url": "https://github.com/ur-passwd-hash"
+    "url": "https://github.com/zachary-satterly"
   },
-  "homepage": "https://github.com/ur-passwd-hash/scruffy#readme",
-  "repository": "https://github.com/ur-passwd-hash/scruffy",
+  "homepage": "https://github.com/zachary-satterly/scruffy#readme",
+  "repository": "https://github.com/zachary-satterly/scruffy",
   "license": "MIT"
 }

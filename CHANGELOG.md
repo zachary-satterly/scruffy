@@ -4,12 +4,30 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
+- Closed the fix half of the loop. `scripts/render_brief.py` renders the
+  human decision brief from the registry — verdict, at most three items to
+  decide, cleared suspicions, checks not run, 150-word body — and `SKILL.md`
+  now forbids writing that summary freehand. Registry items may carry an
+  optional, validated `fix_packet` (target, change, effort, rollback, and
+  executable `command` / `dom_state` / `measurement` / `manual` acceptance
+  checks). `scripts/verify_fixes.py` evaluates approved items only and writes
+  `verification.json` without touching the registry; `scripts/outcomes.py`
+  reports approve, verify, and reopen rates per category and names rules that
+  are raised repeatedly and never approved. `scripts/test_fix_loop.py` covers
+  all four and runs in CI. Also fixed `lint_report_prose.py` crashing on
+  legacy contexts whose `checks_not_run` entries are plain strings.
 - Reconciled Jon Yablonski's *Laws of UX* into the corpus as `principles/PRINCIPLES.md` §34:
   seven laws admitted as observable audit predicates or weighting rules with explicit
   false-positive guards (Hick, Miller, Jakob, Von Restorff, Doherty, common region/uniform
   connectedness, peak-end), the previously overclaimed `[LawsUX]` source row corrected to
   point at the section, and the remaining popular laws recorded as not admitted, with
   reasons, so they are not re-litigated.
+
+## 3.0.1 — 2026-09-02
+
+- Release cut so installers stop delivering 2.3.1/3.0.0 while `main` carries the
+  changes below. `validate_skill.py` now requires the newest CHANGELOG release
+  heading to equal the plugin version.
 - Prevented completed work from reappearing as a repair queue. Audit and repair
   decision surfaces now reserve controls for open or needs-verification items;
   fixed, cleared, merged, and superseded items remain visible and exportable as

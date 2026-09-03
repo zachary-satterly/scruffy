@@ -7,7 +7,7 @@
 <p align="center"><strong>Find the AI slop. Prove it. Fix it.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/ur-passwd-hash/scruffy/actions/workflows/validate.yml"><img src="https://github.com/ur-passwd-hash/scruffy/actions/workflows/validate.yml/badge.svg" alt="Validation"></a>
+  <a href="https://github.com/zachary-satterly/scruffy/actions/workflows/validate.yml"><img src="https://github.com/zachary-satterly/scruffy/actions/workflows/validate.yml/badge.svg" alt="Validation"></a>
   <a href="evals/sentence-slop/readme-dogfood-2026-08-16.md"><img src="https://img.shields.io/badge/README-AI--slop%20reviewed-13543e" alt="README AI-slop reviewed"></a>
   <img src="https://img.shields.io/badge/Agent%20Skills-compatible-13543e" alt="Agent Skills compatible">
   <img src="https://img.shields.io/badge/Codex%20%2B%20Claude-compatible-c69b3f" alt="Codex and Claude compatible">
@@ -59,7 +59,7 @@ The README is written for people evaluating, installing, or maintaining Scruffy.
 Inside Claude Code, add this repository as a marketplace and install Scruffy:
 
 ```text
-/plugin marketplace add ur-passwd-hash/scruffy
+/plugin marketplace add zachary-satterly/scruffy
 ```
 
 ```text
@@ -75,7 +75,7 @@ Then run the stable, namespaced plugin command:
 ### Codex quick start
 
 ```sh
-git clone https://github.com/ur-passwd-hash/scruffy.git
+git clone https://github.com/zachary-satterly/scruffy.git
 mkdir -p ~/.agents/skills
 ln -s "$(pwd)/scruffy" ~/.agents/skills/scruffy
 ```
@@ -198,7 +198,7 @@ This repository follows the [Agent Skills specification](https://agentskills.io/
 The repository is both a Claude Code plugin and a one-plugin marketplace. Install it from inside Claude Code:
 
 ```text
-/plugin marketplace add ur-passwd-hash/scruffy
+/plugin marketplace add zachary-satterly/scruffy
 ```
 
 ```text
@@ -214,14 +214,14 @@ Invoke the installed plugin explicitly:
 The equivalent shell commands are:
 
 ```sh
-claude plugin marketplace add ur-passwd-hash/scruffy
+claude plugin marketplace add zachary-satterly/scruffy
 claude plugin install scruffy@scruffy-marketplace
 ```
 
 For local plugin development, clone the repository and load it directly:
 
 ```sh
-git clone https://github.com/ur-passwd-hash/scruffy.git
+git clone https://github.com/zachary-satterly/scruffy.git
 cd scruffy
 claude --plugin-dir .
 ```

@@ -2,7 +2,7 @@
   "name": "scruffy-marketplace",
   "owner": {
     "name": "Zachary Satterly",
-    "url": "https://github.com/ur-passwd-hash"
+    "url": "https://github.com/zachary-satterly"
   },
   "description": "Claude Code distribution for Scruffy, the AI-slop audit and cleanup skill for web apps.",
   "plugins": [
@@ -10,7 +10,7 @@
       "name": "scruffy",
       "source": "./",
       "description": "Find and fix product, interaction, visual, editorial, accessibility, performance, and structural AI slop with evidence and durable work orders.",
-      "version": "3.0.0"
+      "version": "3.0.1"
     }
   ]
 }
