@@ -4,6 +4,10 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
+_No unreleased changes._
+
+## 3.0.2 — 2026-09-02
+
 - Closed the fix half of the loop. `scripts/render_brief.py` renders the
   human decision brief from the registry — verdict, at most three items to
   decide, cleared suspicions, checks not run, 150-word body — and `SKILL.md`
