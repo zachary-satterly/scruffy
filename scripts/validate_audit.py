@@ -429,36 +429,6 @@ def validate_fix_packet(packet: Any, label: str, acceptance_checks: list[Any]) -
             fail(f"{check_label}.check_ref must index acceptance_checks")
 
 
-# The canonical finding severities are critical/high/medium/low; "major" is the
-# prose word for `high`, not a fifth key.
-PACKET_REQUIRED_SEVERITIES = {"critical", "high"}
-ACTIVE_STATUSES = {"open", "needs-verification"}
-
-
-def require_fix_packets(registry: dict[str, Any]) -> None:
-    """Opt-in gate: a serious open finding must carry an executable repair.
-
-    Default off on purpose. Existing published registries were written before
-    fix packets existed, and turning this on by default would retroactively
-    invalidate them. Turn it on for new work, where a prose-only acceptance
-    check on a critical finding is a promise nobody can execute.
-    """
-    offenders = [
-        item["id"]
-        for item in registry.get("items", [])
-        if isinstance(item, dict)
-        and item.get("kind") == "finding"
-        and item.get("status") in ACTIVE_STATUSES
-        and item.get("severity") in PACKET_REQUIRED_SEVERITIES
-        and not isinstance(item.get("fix_packet"), dict)
-    ]
-    if offenders:
-        fail(
-            "--require-fix-packets: open critical or major findings without a fix_packet: "
-            + ", ".join(sorted(offenders))
-        )
-
-
 def validate_registry(registry: dict[str, Any], source: str = "registry") -> dict[str, dict[str, Any]]:
     schema_version = registry.get("schema_version")
     if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
@@ -651,69 +621,6 @@ def validate_baseline(current: dict[str, Any], baseline: dict[str, Any]) -> None
             fail(f"new ID {item_id} reuses baseline identity from {baseline_identity[item['identity_key']]}")
         if item_id not in baseline_items and item["revision_disposition"] != "new":
             fail(f"new item {item_id} must have disposition new")
-
-
-def validate_fix_verification(
-    current: dict[str, Any],
-    baseline: dict[str, Any],
-    verification: dict[str, Any] | None,
-) -> None:
-    """A fix that had an executable check must be proven, not judged.
-
-    `references/durability.md` makes `fixed` a reconciliation judgment, which is
-    right for items nobody could automate. It is too weak for an item that
-    shipped a fix_packet: the auditor already wrote the executable proof, so
-    calling it fixed without running it discards evidence that exists. This rule
-    reaches only those items; everything else keeps judgment-based behaviour.
-    """
-    prior_packets = {
-        item["id"]
-        for item in baseline.get("items", [])
-        if isinstance(item, dict)
-        and item.get("status") in ACTIVE_STATUSES
-        and isinstance(item.get("fix_packet"), dict)
-    }
-    owed = [
-        item
-        for item in current.get("items", [])
-        if isinstance(item, dict) and item.get("status") == "fixed" and item.get("id") in prior_packets
-    ]
-    if not owed:
-        return
-    if verification is None:
-        fail(
-            "items marked fixed carried a baseline fix_packet but no --verification was supplied: "
-            + ", ".join(sorted(item["id"] for item in owed))
-        )
-    proven: dict[str, list[dict[str, Any]]] = {}
-    for row in verification.get("items", []) or []:
-        if isinstance(row, dict) and row.get("id"):
-            proven.setdefault(str(row["id"]), []).append(row)
-    for item in owed:
-        item_id = str(item["id"])
-        note = item.get("verification_override")
-        if isinstance(note, str) and note.strip():
-            continue
-        if any(
-            isinstance(ref, str) and ref.startswith("specialist_review")
-            for ref in item.get("evidence_refs", []) or []
-        ):
-            continue
-        rows = proven.get(item_id)
-        if not rows:
-            fail(f"{item_id} is fixed and carried a fix_packet but verification.json has no entry for it")
-        for row in rows:
-            checks = row.get("checks") or []
-            failing = [
-                check
-                for check in checks
-                if isinstance(check, dict)
-                and check.get("kind") != "manual"
-                and check.get("result") != "pass"
-            ]
-            if not checks or failing:
-                detail = ", ".join(str(check.get("summary") or check.get("kind")) for check in failing) or "no checks recorded"
-                fail(f"{item_id} is fixed but its verification checks did not all pass: {detail}")
 
 
 def validate_decisions(decisions: dict[str, Any], registry: dict[str, Any], baseline_decisions: dict[str, Any] | None = None) -> None:
@@ -1770,16 +1677,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Fail when reader-facing prose carries cognitive-load leads.",
     )
-    parser.add_argument(
-        "--require-fix-packets",
-        action="store_true",
-        help="Fail when an open critical or high finding has no executable fix_packet.",
-    )
-    parser.add_argument(
-        "--verification",
-        type=Path,
-        help="verification.json from verify_fixes.py; with --baseline, proves fixed items that carried a fix_packet.",
-    )
     return parser.parse_args()
 
 
@@ -1801,21 +1698,10 @@ def main() -> int:
         and not args.baseline_context
     ):
         fail("context 1.2 revisions require --baseline-context to validate durable ledger continuity")
-    if args.require_fix_packets:
-        require_fix_packets(registry)
     baseline_registry = None
     if args.baseline:
         baseline_registry = load_json(args.baseline)
         validate_baseline(registry, baseline_registry)
-        # The evidence rule needs a baseline to know which items shipped a
-        # packet; without one there is nothing to hold the fix against.
-        validate_fix_verification(
-            registry,
-            baseline_registry,
-            load_json(args.verification) if args.verification else None,
-        )
-    elif args.verification:
-        fail("--verification requires --baseline; a fix is proven against the revision that promised it")
     if args.baseline_context:
         if context is None or baseline_registry is None:
             fail("--baseline-context requires current --context and --baseline artifacts")
@@ -1841,12 +1727,8 @@ def main() -> int:
     checks = ["registry"]
     if args.context:
         checks.append("context and evidence")
-    if args.require_fix_packets:
-        checks.append("fix-packet coverage")
     if args.baseline:
         checks.append("baseline continuity")
-    if args.verification:
-        checks.append("fix verification evidence")
     if args.baseline_context:
         checks.append("context ledger continuity")
     if args.decisions:

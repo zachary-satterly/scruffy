@@ -258,62 +258,6 @@ def unattached_screenshot_html(
     )
 
 
-CHECK_KIND_LABELS = {
-    "command": "Command",
-    "dom_state": "Page state",
-    "measurement": "Measurement",
-    "manual": "Manual",
-}
-
-
-def check_summary(check: dict[str, Any]) -> str:
-    """One readable line per acceptance check, whatever shape it carries."""
-    for key in ("summary", "run", "selector", "metric"):
-        value = check.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    expect = check.get("expect")
-    return json.dumps(expect, sort_keys=True) if expect else "no detail recorded"
-
-
-def fix_packet_html(item: dict[str, Any]) -> str:
-    """Render the executable repair so a reader can see the promised change.
-
-    A prose acceptance check is a promise; a fix packet is the executable form
-    of it. Rendering it is what lets a human approve the actual change rather
-    than a description of one. Manual checks are labelled second-class here for
-    the same reason the skill calls them second-class: nothing runs them.
-    """
-    packet = item.get("fix_packet")
-    if not isinstance(packet, dict):
-        return ""
-    targets = ", ".join(
-        f'{esc(str(target.get("kind", "target")))}: {esc(str(target.get("value", "")))}'
-        for target in packet.get("target", [])
-        if isinstance(target, dict)
-    ) or "not recorded"
-    effort = {"S": "Small", "M": "Medium", "L": "Large"}.get(str(packet.get("effort")), str(packet.get("effort", "not recorded")))
-    rows = []
-    for check in packet.get("acceptance", []) or []:
-        if not isinstance(check, dict):
-            continue
-        kind = str(check.get("kind") or "manual")
-        label = CHECK_KIND_LABELS.get(kind, kind.replace("_", " ").title())
-        manual = kind == "manual"
-        note = " <span class=\"check-manual\">needs a person; no tool can pass it</span>" if manual else ""
-        rows.append(
-            f'<li class="check-{esc(kind)}"><span class="check-kind">{esc(label)}</span> {esc(check_summary(check))}{note}</li>'
-        )
-    checks_html = f'<ul class="fix-checks">{"".join(rows)}</ul>' if rows else '<p class="quiet">No acceptance checks recorded.</p>'
-    return (
-        '<div class="fix-packet"><h4>Executable fix packet</h4>'
-        f'<p class="meta"><strong>Where:</strong> {targets} · <strong>Effort:</strong> {esc(effort)}</p>'
-        f'<p><strong>Change:</strong> {esc(str(packet.get("change", "not recorded")))}</p>'
-        f'<p><strong>Undo:</strong> {esc(str(packet.get("rollback", "not recorded")))}</p>'
-        f'<p class="meta">Acceptance checks</p>{checks_html}</div>'
-    )
-
-
 def item_html(
     item: dict[str, Any],
     decision: dict[str, Any] | None,
@@ -366,8 +310,6 @@ def item_html(
         {editorial_html}
         <h4>Recommended next step</h4><p>{esc(humanize_text(item['recommendation'], item_labels=item_labels, evidence_assets=evidence_assets))}</p>
         <h4>How to verify it</h4>{humanized_list_html(item.get('acceptance_checks', []), item_labels=item_labels, evidence_assets=evidence_assets, empty='No additional verification required for this strength.')}
-        {fix_packet_html(item)}
-        {f'<p class="verification-override"><strong>Marked fixed without executable proof:</strong> {esc(str(item["verification_override"]))}</p>' if item.get("verification_override") else ""}
         <p class="dependency"><strong>Dependencies:</strong> {esc(dependencies)} · <strong>Review history:</strong> {esc(humanize_text(item['disposition_reason'] or 'New in this review.', item_labels=item_labels, evidence_assets=evidence_assets))}</p>
         {decision_control(item, decision)}
       </div>
@@ -496,15 +438,6 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
     title = context.get("title", "Scruffy audit")
     target = registry.get("target", "")
     storage_key = f"anti-slop:{registry['audit_id']}:decisions:v2"
-    # The handoff has to name a real bundle directory and a real target, or the
-    # agent that receives it has to guess where to write verification.json.
-    handoff_json = json.dumps(
-        {
-            "target": str(registry.get("target") or "the audited product"),
-            "bundle": str(context_path.parent),
-        },
-        ensure_ascii=False,
-    ).replace("</", "<\\/")
 
     severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3, "none": 4}
     additional_findings.sort(key=lambda i: (i["category"], severity_rank.get(i["severity"], 9)))
@@ -679,18 +612,6 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
    every other field still renders below. */
       .registry-item .plain-lead{{font-size:1.24rem;line-height:1.4;margin:0 0 .35rem;font-weight:600;max-width:62ch}}
       .registry-item h3{{font-size:.94rem;font-weight:600;opacity:.72;margin:0 0 .3rem}}
-
-/* The fix packet is the executable form of the acceptance checks. It renders
-   inside the item so approving a change and reading the change are the same
-   act. Manual checks are dimmed because nothing runs them. */
-      .fix-packet{{margin:.75rem 0 0;padding:.7rem .85rem;border-left:3px solid #141414;background:rgba(20,20,20,.035);min-width:0}}
-      .fix-packet h4{{margin:0 0 .35rem}}
-      .fix-packet p{{margin:.2rem 0;overflow-wrap:anywhere}}
-      .fix-checks{{margin:.3rem 0 0;padding-left:1.1rem}}
-      .fix-checks li{{margin:.2rem 0;overflow-wrap:anywhere}}
-      .fix-checks .check-kind{{display:inline-block;font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;border:1px solid currentColor;border-radius:2px;padding:0 .3rem;margin-right:.35rem;opacity:.75}}
-      .fix-checks li.check-manual{{opacity:.62}}
-      .fix-checks .check-manual{{font-style:italic;opacity:.8}}
 </style>
 </head>
 <body>
@@ -706,7 +627,7 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
     <section id="assumptions"><h2>Assumptions that could change the result</h2>{assumptions_html}</section>
     <section id="referrals"><h2>Specialist referrals</h2>{referrals_html}</section>
     <section id="score"><h2>Quality scores, highest concern first</h2><p class="section-note">Zero means clear; three means a major problem. “Not scored” means the review did not have enough evidence.</p>{table_html(['Area','Result','Why'],score_table_rows)}</section>
-    <section id="findings"><h2>Findings</h2><div class="toolbar" aria-label="Review controls"><button data-filter="all" class="primary">All open items</button><button data-filter="open">Open</button><button data-filter="needs-verification">Needs more evidence</button><button id="download-findings">Download full audit data</button><button id="download-decisions">Download decisions</button><button id="copy-decisions">Copy decisions</button><button id="copy-handoff">Copy AI handoff</button><label>Import decisions<input id="import-decisions" type="file" accept="application/json"></label></div><p id="ui-status" class="status" aria-live="polite"></p>{section_items('Address first','The highest-priority findings are shown first; all findings remain available below.',prioritized_findings,decision_map,context,context_path.parent,item_labels)}{section_items('Other active findings','Confirmed findings and items that still need more evidence.',additional_findings,decision_map,context,context_path.parent,item_labels)}</section>
+    <section id="findings"><h2>Findings</h2><div class="toolbar" aria-label="Review controls"><button data-filter="all" class="primary">All open items</button><button data-filter="open">Open</button><button data-filter="needs-verification">Needs more evidence</button><button id="download-findings">Download full audit data</button><button id="download-decisions">Download decisions</button><button id="copy-decisions">Copy decisions</button><label>Import decisions<input id="import-decisions" type="file" accept="application/json"></label></div><p id="ui-status" class="status" aria-live="polite"></p>{section_items('Address first','The highest-priority findings are shown first; all findings remain available below.',prioritized_findings,decision_map,context,context_path.parent,item_labels)}{section_items('Other active findings','Confirmed findings and items that still need more evidence.',additional_findings,decision_map,context,context_path.parent,item_labels)}</section>
     <section id="enhancements"><h2>Optional enhancements</h2>{enhancement_html}</section>
     <section id="strengths"><h2>Strengths to preserve</h2>{section_items('Preserve','These existing qualities should survive any repair work.',strengths,decision_map,context,context_path.parent,item_labels)}</section>
     <section id="resolved"><h2>Closed concerns</h2>{section_items('Resolved items','Earlier concerns remain visible so the review history stays complete.',resolved,decision_map,context,context_path.parent,item_labels)}</section>
@@ -738,31 +659,6 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
     document.getElementById('download-findings').addEventListener('click',()=>download(`${{registry.audit_id}}-findings.json`,registry));
     document.getElementById('download-decisions').addEventListener('click',()=>download(`${{registry.audit_id}}-decisions.json`,state));
     document.getElementById('copy-decisions').addEventListener('click',async()=>{{try{{await navigator.clipboard.writeText(JSON.stringify(state,null,2));document.getElementById('ui-status').textContent='Decisions copied.'}}catch{{document.getElementById('ui-status').textContent='Clipboard unavailable; use Download decisions.'}}}});
-    const handoffMeta={handoff_json};
-    // Copying decisions gives an agent the data but no instruction, so the
-    // approvals sat unimplemented. This builds the instruction with them.
-    const buildHandoff=()=>{{
-      const titles=Object.fromEntries(registry.items.map(item=>[item.id,item.title]));
-      const active=new Set(registry.items.filter(item=>['open','needs-verification'].includes(item.status)).map(item=>item.id));
-      const approved=state.decisions.filter(row=>row.decision==='approve'&&active.has(row.item_id));
-      const list=approved.length?approved.map(row=>`- ${{row.item_id}}: ${{titles[row.item_id]||'(untitled item)'}}`).join('\\n'):'- (nothing is approved yet)';
-      return [
-        `Run Scruffy in redesign mode with source-write authority on ${{handoffMeta.target}}. Implement only the approve items below, author missing fix packets, run scripts/verify_fixes.py --execute, write verification.json into ${{handoffMeta.bundle}}, do not change item status.`,
-        '',
-        `Approved items (${{approved.length}}):`,
-        list,
-        '',
-        'decisions.json:',
-        '```json',
-        JSON.stringify(state,null,2),
-        '```'
-      ].join('\\n');
-    }};
-    document.getElementById('copy-handoff').addEventListener('click',async()=>{{
-      const text=buildHandoff();
-      try{{await navigator.clipboard.writeText(text);document.getElementById('ui-status').textContent='Handoff copied. Paste it into your AI task.'}}
-      catch{{download(`${{registry.audit_id}}-decisions.json`,state);document.getElementById('ui-status').textContent='Clipboard unavailable; decisions downloaded instead. Tell your AI to implement only the approved items, run scripts/verify_fixes.py --execute, and write verification.json into the bundle.'}}
-    }});
     document.getElementById('import-decisions').addEventListener('change',async event=>{{const file=event.target.files[0];if(!file)return;try{{const incoming=JSON.parse(await file.text());if(incoming.schema_version!==registry.schema_version||incoming.audit_id!==registry.audit_id)throw new Error('this file belongs to a different review');state=incoming;hydrate();document.getElementById('ui-status').textContent='Decisions imported and matched to the correct review items.'}}catch(error){{document.getElementById('ui-status').textContent=`Import rejected: ${{error.message}}`}}event.target.value=''}});
     document.querySelectorAll('[data-filter]').forEach(button=>button.addEventListener('click',()=>{{const filter=button.dataset.filter;document.querySelectorAll('[data-filter]').forEach(candidate=>candidate.classList.toggle('primary',candidate===button));itemRows.forEach(row=>{{const active=['open','needs-verification'].includes(row.dataset.status);row.hidden=filter==='all'?!active:row.dataset.status!==filter}})}}));
     hydrate();

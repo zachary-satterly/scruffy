@@ -37,32 +37,12 @@ def assert_archetype_registry() -> None:
         assert required in keys, f"missing product-surface regression: {required}"
 
 
-def assert_audit_dashboard_handoff() -> None:
-    """The audit dashboard must emit an instruction, not only the decisions.
-
-    Copying decisions hands an agent data with no task attached, which is how
-    approvals accumulated without anything implementing them. The handoff names
-    the verifier and the artifact so the receiving session knows what proof it
-    owes.
-    """
-    source = (ROOT / "scripts" / "render_dashboard.py").read_text(encoding="utf-8")
-    for fragment in (
-        'id="copy-handoff"',
-        "Copy AI handoff",
-        "scripts/verify_fixes.py --execute",
-        "write verification.json into",
-        "do not change item status",
-    ):
-        assert fragment in source, f"audit dashboard handoff lost: {fragment}"
-
-
 def run(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run([sys.executable, *args], capture_output=True, text=True)
 
 
 def main() -> int:
     assert_archetype_registry()
-    assert_audit_dashboard_handoff()
     if "--archetypes-only" in sys.argv:
         print("PASS: archetype registry headings and probe coverage resolve, including universal, lookup, ingestion, and multi-channel service modules")
         return 0

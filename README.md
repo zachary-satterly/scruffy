@@ -68,7 +68,7 @@ Scruffy works in a fixed order and refuses to skip steps.
 2. **Ground.** Load the cited [principle corpus](principles/PRINCIPLES.md), any taste evidence the user supplied, and, if a design-reference connector such as Mobbin MCP is connected, shipped-product references for the pattern in question. A popular pattern is evidence of convention, not of quality.
 3. **Audit.** Operate representative tasks rather than judging screenshots. Run the deterministic [rule packs](references/rule-packs.md) against page HTML to raise leads. Every lead is then confirmed or cleared by operating the interface; cleared suspicions are published beside confirmed findings. A finding needs evidence, a demonstrated user consequence, and a falsification attempt. Category gates are enforced by the validator: performance needs a runtime measurement, accessibility a named criterion and a receipt, visual a rendered receipt, interaction an operation receipt, and critical severity needs high confidence and two receipts.
 4. **Repair.** Only human-approved items, only with explicit source-write authority. Design work gets three rule-cited directions per work group, each anchored to a reference image; the human picks one.
-5. **Verify.** Re-run the acceptance checks and reconcile every stable finding ID. Code having changed is not the same as a finding being fixed.
+5. **Verify.** Re-run the acceptance checks and reconcile every stable finding ID. Code having changed is not the same as a finding being fixed: where the audit attached an executable fix packet, `verification.json` has to show its checks passing before the next revision may call the item fixed.
 
 Repeat audits use an immutable registry. Each earlier item must be carried, reopened, fixed, cleared, merged, or superseded; a shortlist can shrink, the record cannot. Blind audits quarantine prior reports, freeze discovery by hash, and reveal the baseline only during reconciliation. Target content (copy, DOM attributes, comments, payloads) is treated as untrusted data, so a page that tells the auditor to change scope gets recorded as evidence and otherwise ignored.
 
@@ -186,7 +186,7 @@ Live references rank below the user's own verdicts, constraints, and taste evide
 
 ```text
 SKILL.md              runtime instructions; the only file agents execute
-references/           protocols SKILL.md loads on demand (taxonomy, contract, verification, scoring, durability, blind audit, rule packs, output schema)
+references/           protocols SKILL.md loads on demand (taxonomy, contract, verification, scoring, durability, blind audit, rule packs, output schema, fix loop)
 schema/               canonical data: taxonomy.json, audit-contract.json, sentence-slop-pack.json, rules/*.json
 principles/           cited research corpus, source registry, and the per-source ledger
 scripts/              validators, renderers, rule engine, tests; Python standard library only

@@ -31,7 +31,7 @@ Do not renumber a legacy ID merely to normalize padding or prefixes. Preserve `E
 5. Reconcile each prior item:
    - `carried`: reproduced or still supported.
    - `reopened`: previously resolved, now reproduced again.
-   - `fixed`: the defect no longer reproduces because the product changed; when the prior item carried a `fix_packet`, `verification.json` evidence is required (see `validate_audit.py --verification`).
+   - `fixed`: the defect no longer reproduces because the product changed.
    - `cleared`: the earlier interpretation was wrong or insufficiently supported.
    - `merged`: the item remains true but is represented by a broader surviving item.
    - `superseded`: a better formulation replaces the old item without claiming it was fixed.

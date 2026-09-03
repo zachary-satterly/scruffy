@@ -51,60 +51,6 @@ def table(headers: list[str], rows: list[list[Any]]) -> str:
     return "\n".join(output)
 
 
-CHECK_KIND_LABELS = {
-    "command": "Command",
-    "dom_state": "Page state",
-    "measurement": "Measurement",
-    "manual": "Manual",
-}
-
-
-def check_summary(check: dict[str, Any]) -> str:
-    for key in ("summary", "run", "selector", "metric"):
-        value = check.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    expect = check.get("expect")
-    return json.dumps(expect, sort_keys=True) if expect else "no detail recorded"
-
-
-def fix_packet_block(item: dict[str, Any]) -> str:
-    """The same executable repair the dashboard shows, as a sub-list.
-
-    The Markdown report is the artifact that survives without a browser, so it
-    carries the packet too. A manual check is labelled as such: nothing runs it.
-    """
-    packet = item.get("fix_packet")
-    if not isinstance(packet, dict):
-        return ""
-    targets = ", ".join(
-        f'{clean(target.get("kind", "target"))}: {clean(target.get("value", ""))}'
-        for target in packet.get("target", [])
-        if isinstance(target, dict)
-    ) or "not recorded"
-    effort = {"S": "Small", "M": "Medium", "L": "Large"}.get(str(packet.get("effort")), clean(packet.get("effort", "not recorded")))
-    lines = [
-        "",
-        "**Executable fix packet**",
-        "",
-        f"- Where: {targets}",
-        f"- Change: {clean(packet.get('change', 'not recorded'))}",
-        f"- Effort: {clean(effort)}",
-        f"- Undo: {clean(packet.get('rollback', 'not recorded'))}",
-        "- Acceptance checks:",
-    ]
-    checks = [check for check in packet.get("acceptance", []) or [] if isinstance(check, dict)]
-    if not checks:
-        lines.append("  - None recorded.")
-    for check in checks:
-        kind = str(check.get("kind") or "manual")
-        label = CHECK_KIND_LABELS.get(kind, kind.replace("_", " ").title())
-        suffix = " *(needs a person; no tool can pass it)*" if kind == "manual" else ""
-        lines.append(f"  - **{label}:** {clean(check_summary(check))}{suffix}")
-    lines.append("")
-    return "\n".join(lines) + "\n"
-
-
 def render_item(
     item: dict[str, Any],
     decision: dict[str, Any] | None,
@@ -166,7 +112,7 @@ def render_item(
 **How to verify it**
 
 {bullets([humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in item.get('acceptance_checks', [])], 'No additional verification required for this strength.')}
-{fix_packet_block(item)}{f"**Marked fixed without executable proof:** {clean(item['verification_override'])}" + chr(10) + chr(10) if item.get('verification_override') else ''}
+
 **Dependencies:** {clean(dependencies)}  
 **Review-history reason:** {clean(humanize_text(item.get('disposition_reason') or 'New in this review.', item_labels=item_labels, evidence_assets=evidence_assets))}{decision_text}
 """

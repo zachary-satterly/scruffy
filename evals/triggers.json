@@ -12,8 +12,7 @@
     {"prompt": "Turn this UI review into dependency-ordered implementation work orders.", "mode": "audit"},
     {"prompt": "Audit the sentence construction across this web app for repetitive cadence, rhetorical filler, vague abstraction, and obscured responsibility.", "mode": "audit"},
     {"prompt": "Review this app for editorial slop across content strategy, unsupported claims, provenance, terminology, microcopy, recovery language, voice, and sentence construction.", "mode": "audit"},
-    {"prompt": "Run a blind fresh-eyes audit of this product, freeze the independent findings, and only then reconcile the previous report.", "mode": "audit"},
-    {"prompt": "Implement the approved findings from this scruffy bundle and prove each fix with its acceptance checks.", "mode": "redesign"}
+    {"prompt": "Run a blind fresh-eyes audit of this product, freeze the independent findings, and only then reconcile the previous report.", "mode": "audit"}
   ],
   "should_not_trigger": [
     {"prompt": "Perform a security-only scan of this API for injection vulnerabilities.", "reason": "Use a security-review workflow."},
@@ -22,7 +21,6 @@
     {"prompt": "Review the correctness of this backend authentication middleware.", "reason": "Non-interface code review."},
     {"prompt": "Summarize these YouTube transcripts.", "reason": "Research summarization alone does not invoke an interface audit."},
     {"prompt": "Fix a failing GitHub Actions test.", "reason": "Use a CI-debugging workflow."},
-    {"prompt": "Determine whether this student essay was written by AI and give me a probability.", "reason": "Scruffy audits observable interface quality and does not classify authorship."},
-    {"prompt": "Summarize these approved findings for my status update.", "reason": "Summarizing decisions is reporting; approval is not write authority and no implementation may run."}
+    {"prompt": "Determine whether this student essay was written by AI and give me a probability.", "reason": "Scruffy audits observable interface quality and does not classify authorship."}
   ]
 }
