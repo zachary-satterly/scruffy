@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "audit_id": "durability-fixture",
+  "revision_id": "r2",
+  "verified_at": "2026-09-03T00:00:00+00:00",
+  "executed_commands": true,
+  "items": [
+    {
+      "id": "AS-01",
+      "title": "Navigation state is not addressable",
+      "decision": "approve",
+      "result": "manual",
+      "checks": [
+        {
+          "index": 0,
+          "kind": "command",
+          "summary": "routing tests pass",
+          "result": "pass",
+          "detail": "exit 0"
+        },
+        {
+          "index": 1,
+          "kind": "manual",
+          "summary": "a colleague opens a copied URL and sees the same state",
+          "result": "manual",
+          "detail": "needs a human confirmation"
+        }
+      ]
+    }
+  ],
+  "skipped": []
+}

@@ -155,7 +155,7 @@ Other useful entry points:
 - `scripts/scaffold_audit.py --audit-id <id> --target <desc> --title <t> --out <dir>` starts a new bundle that already passes validation. Add `--mode redesign --repository-write-authority authorized` when implementation is explicitly authorized, and repeat `--supplied-screenshot <path>` to copy PNG, JPEG, GIF, or WebP evidence into the bundle.
 - `scripts/scan.py <url-or-file>` is the sixty-second front door: static leads from the rule packs plus the list of operated checks that a static pass cannot run.
 - `scripts/rule_engine.py page.html --output leads.json` runs the rule packs on their own. Add your own pack with `--pack`; see [`references/rule-packs.md`](references/rule-packs.md).
-- `scripts/validate_audit.py findings.json --context context.json --decisions decisions.json --dashboard audit-report.html --markdown audit-report.md` rejects improvised categories, contradictory modes, unauthorized writes, unresolved evidence IDs, missing captured files, and editorial findings without a review receipt. Pass `--baseline` and `--baseline-decisions` on a repeat audit.
+- `scripts/validate_audit.py findings.json --context context.json --decisions decisions.json --dashboard audit-report.html --markdown audit-report.md` rejects improvised categories, contradictory modes, unauthorized writes, unresolved evidence IDs, missing captured files, and editorial findings without a review receipt. Pass `--baseline` and `--baseline-decisions` on a repeat audit. Two opt-in gates close the fix loop: `--require-fix-packets` fails when an open critical or high finding carries no executable fix packet, and `--verification verification.json` (with `--baseline`) refuses to accept an item as fixed when the baseline promised an executable check and nothing ran it.
 - `scripts/migrate_decisions.py previous-decisions.json findings.json decisions.json --prior-registry previous-findings.json` carries decisions into a new revision.
 - `scripts/verify_fixes.py findings.json --decisions decisions.json --execute` runs the executable acceptance checks attached to approved items and writes `verification.json` without touching the registry.
 - `scripts/outcomes.py findings.json:decisions.json:verification.json ...` (one triple per revision, oldest first) reports approve, verify, and reopen rates per category and names rules that keep firing but never get approved.
@@ -169,6 +169,8 @@ The repair stage lives in [`mop/`](mop/); the path is kept for automation compat
 ```sh
 python3 mop/scripts/mop_run.py <bundle-dir> --authorized --out <repair-dir>
 ```
+
+The audit dashboard's **Copy AI handoff** button copies a paste-ready instruction — the target, the approved item IDs, `scripts/verify_fixes.py --execute`, and where to write `verification.json` — so approvals leave the browser as a task rather than as raw data. [`references/fix-loop.md`](references/fix-loop.md) is the protocol the receiving session follows.
 
 ## Reference grounding
 

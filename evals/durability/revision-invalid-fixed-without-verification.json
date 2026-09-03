@@ -1,0 +1,151 @@
+{
+  "schema_version": "2.0",
+  "audit_id": "durability-fixture",
+  "target": "https://example.test/app",
+  "revision_id": "r2",
+  "baseline_revision_id": "r1",
+  "items": [
+    {
+      "id": "AS-01",
+      "identity_key": "navigation-state-not-addressable",
+      "kind": "finding",
+      "title": "Navigation state remains unaddressable",
+      "category": "information-architecture",
+      "severity": "medium",
+      "confidence": "high",
+      "status": "fixed",
+      "revision_disposition": "fixed",
+      "first_seen_revision": "r1",
+      "last_observed_revision": "r2",
+      "observation": "The URL still remains unchanged after navigation.",
+      "user_impact": "A user still cannot share the current state.",
+      "evidence": [
+        "Reproduced navigation from state one to state two."
+      ],
+      "cause": "Internal state still has no address contract.",
+      "recommendation": "Represent state in the URL.",
+      "acceptance_checks": [
+        "A copied URL opens the same state."
+      ],
+      "depends_on": [],
+      "disposition_reason": "The address now changes with the view and reloads into the same state.",
+      "destination_id": null,
+      "fix_packet": {
+        "target": [
+          {
+            "kind": "file",
+            "value": "src/router.js"
+          }
+        ],
+        "change": "Write the active view into the address bar and read it back on load.",
+        "effort": "M",
+        "rollback": "Revert the routing commit; nothing else depends on it.",
+        "acceptance": [
+          {
+            "kind": "command",
+            "run": "npm test -- routing",
+            "expect": {
+              "exit_code": 0
+            },
+            "summary": "routing tests pass",
+            "check_ref": 0
+          },
+          {
+            "kind": "manual",
+            "summary": "a colleague opens a copied URL and sees the same state"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ENH-01",
+      "identity_key": "copy-current-link",
+      "kind": "enhancement",
+      "title": "Copy-link enhancement is absorbed by the routing work",
+      "category": "information-architecture",
+      "severity": "medium",
+      "confidence": "high",
+      "status": "merged",
+      "revision_disposition": "merged",
+      "first_seen_revision": "r1",
+      "last_observed_revision": "r2",
+      "observation": "Copy-link behavior is part of the new routing work order.",
+      "user_impact": "The original sharing outcome remains represented.",
+      "evidence": [
+        "AS-02 acceptance includes copying the current link."
+      ],
+      "cause": "A broader item owns the complete solution.",
+      "recommendation": "Implement through AS-02.",
+      "acceptance_checks": [
+        "AS-02 exposes a copyable current URL."
+      ],
+      "depends_on": [
+        "AS-02"
+      ],
+      "disposition_reason": "Merged without deleting the original identity or decision.",
+      "destination_id": "AS-02"
+    },
+    {
+      "id": "STR-01",
+      "identity_key": "clear-primary-action",
+      "kind": "strength",
+      "title": "Primary action remains immediately clear",
+      "category": "product-clarity",
+      "severity": "none",
+      "confidence": "high",
+      "status": "open",
+      "revision_disposition": "carried",
+      "first_seen_revision": "r1",
+      "last_observed_revision": "r2",
+      "observation": "The primary action remains clear.",
+      "user_impact": "Users can still begin without instruction.",
+      "evidence": [
+        "Primary task again started without hesitation."
+      ],
+      "cause": "The hierarchy retains one primary action.",
+      "recommendation": "Preserve the hierarchy.",
+      "acceptance_checks": [],
+      "depends_on": [],
+      "disposition_reason": "Reverified in revision r2.",
+      "destination_id": null
+    },
+    {
+      "id": "AS-02",
+      "identity_key": "share-and-copy-route-contract",
+      "kind": "finding",
+      "title": "Routing needs a complete share contract",
+      "category": "information-architecture",
+      "severity": "medium",
+      "confidence": "high",
+      "status": "open",
+      "revision_disposition": "new",
+      "first_seen_revision": "r2",
+      "last_observed_revision": "r2",
+      "observation": "The route lacks copy and history behavior as one contract.",
+      "user_impact": "Sharing and browser history remain inconsistent.",
+      "evidence": [
+        "Copy and back-forward tests both failed."
+      ],
+      "cause": "The route contract is incomplete.",
+      "recommendation": "Implement address, copy, and history together.",
+      "acceptance_checks": [
+        "Copy and back-forward tests pass."
+      ],
+      "depends_on": [],
+      "disposition_reason": "",
+      "destination_id": null
+    }
+  ],
+  "presentation": {
+    "prioritized_finding_ids": [
+      "AS-02"
+    ],
+    "prioritized_enhancement_ids": [],
+    "strength_ids": [
+      "STR-01"
+    ],
+    "cleared_ids": [
+      "ENH-01"
+    ]
+  }
+}
