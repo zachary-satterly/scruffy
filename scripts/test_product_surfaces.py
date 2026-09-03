@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import subprocess
 import sys
 import tempfile
@@ -47,21 +46,6 @@ def main() -> int:
     if "--archetypes-only" in sys.argv:
         print("PASS: archetype registry headings and probe coverage resolve, including universal, lookup, ingestion, and multi-channel service modules")
         return 0
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    badge = re.search(
-        r'<a href="([^"]+)"><img[^>]+alt="README AI-slop reviewed"',
-        readme,
-    )
-    assert badge, "README review badge must link to its current receipt"
-    receipt_path = Path(badge.group(1))
-    assert receipt_path.parent == Path("evals/sentence-slop") and ".." not in receipt_path.parts
-    receipt = (ROOT / receipt_path).read_text(encoding="utf-8")
-    match = re.search(r"Target SHA-256: `([a-f0-9]{64})`", receipt)
-    assert match, "README review receipt must bind the target hash"
-    assert match.group(1) == hashlib.sha256((ROOT / "README.md").read_bytes()).hexdigest(), (
-        "README changed after its badge-linked review receipt"
-    )
-
     with tempfile.TemporaryDirectory(prefix="scruffy-product-") as directory:
         onepager_checked = False
         base = Path(directory)
@@ -100,8 +84,7 @@ def main() -> int:
         else "SKIP: optional external one-pager fixture was unavailable"
     )
     print(
-        "PASS: README review badge resolves to its current hash-bound receipt; "
-        f"scan entry yields honest leads plus operated checklist; {suffix}"
+        f"PASS: scan entry yields honest leads plus operated checklist; {suffix}"
     )
     return 0
 

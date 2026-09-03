@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import re
 import sys
 from pathlib import Path
@@ -511,45 +510,6 @@ def validate_sentence_evals() -> None:
         fail("sentence-slop fixtures must cover unsupported-language abstention")
 
 
-def validate_readme_dogfood() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    badge = re.search(
-        r'<a href="([^"]+)"><img[^>]+alt="README AI-slop reviewed"',
-        readme,
-    )
-    if not badge:
-        fail("README AI-slop reviewed badge is missing its receipt link")
-    relative = Path(badge.group(1))
-    if relative.is_absolute() or ".." in relative.parts or relative.parent != Path("evals/sentence-slop"):
-        fail("README dogfood receipt must be a local file in evals/sentence-slop")
-    path = ROOT / relative
-    if not path.is_file():
-        fail(f"README dogfood receipt does not exist: {relative}")
-    text = path.read_text(encoding="utf-8")
-    match = re.search(r"Target SHA-256: `([a-f0-9]{64})`", text)
-    if not match:
-        fail("README dogfood receipt is missing its target hash")
-    current_hash = hashlib.sha256((ROOT / "README.md").read_bytes()).hexdigest()
-    if match.group(1) != current_hash:
-        fail("README changed after its editorial dogfood receipt; rerun and reconcile the review")
-    required = (
-        "### Conceptual coherence",
-        "### Sentence portability",
-        "### Discourse purpose",
-        "### Voice and subtext",
-        "### Terminology and information sequence",
-        "### Claim support and provenance",
-        "### Action and recovery clarity",
-        "### Voice and audience fit",
-        "makes no authorship assessment",
-        "one product name",
-        "**Cleared:**",
-    )
-    missing = [fragment for fragment in required if fragment not in text]
-    if missing:
-        fail(f"README editorial dogfood receipt is incomplete: {missing}")
-
-
 def validate_portability() -> None:
     runtime_files = [SKILL, *sorted((ROOT / "references").glob("*.md"))]
     forbidden = {
@@ -586,7 +546,6 @@ def main() -> int:
     validate_trigger_evals()
     validate_archetype_evals()
     validate_sentence_evals()
-    validate_readme_dogfood()
     validate_portability()
     print(
         "PASS: metadata, trigger coverage, progressive-disclosure budget, local references, "

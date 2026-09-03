@@ -90,11 +90,13 @@ Run the complete dependency-free suite before committing:
 python3 scripts/validate_skill.py
 python3 scripts/claude_adapter.py --check
 python3 scripts/validate_corpus.py
+python3 scripts/validate_sources.py
 python3 scripts/test_durability.py
 python3 scripts/test_audit_contract.py
 python3 scripts/test_sentence_slop.py
 python3 scripts/test_blind_protocol.py
 python3 scripts/test_blind_evaluator.py
+python3 scripts/test_fix_loop.py
 python3 scripts/test_sentence_blind_runner.py
 python3 scripts/test_web_fixtures.py
 python3 scripts/rule_engine.py --check

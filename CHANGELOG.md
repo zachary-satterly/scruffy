@@ -4,7 +4,20 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
-_No unreleased changes._
+- Rewrote `README.md` at roughly half the prose. Removed the self-referential
+  sections (the naming-history table, "This README is part of the product",
+  the "What you get" and "Why the method is harder to fool" lists) and the
+  decorative badges; replaced the per-file tree with a directory map so it
+  stops drifting; documented `scan.py`, `render_onepager.py`, `verify_fixes.py`,
+  `outcomes.py`, and the review-routing and source-ledger files that had never
+  been listed; made the Validate list match CI (`validate_sources.py`,
+  `test_fix_loop.py` were missing) and fixed the same list in `AGENTS.md`.
+- Retired the hash-bound README editorial dogfood gate
+  (`validate_readme_dogfood` in `validate_skill.py` and the matching assertion
+  in `test_product_surfaces.py`) and the "AI-slop reviewed" badge. A document
+  certifying itself with the tool it documents is a claim, not evidence, and
+  the gate made every README edit a two-file ritual. The receipts under
+  `evals/sentence-slop/readme-dogfood-*.md` stay as history.
 
 ## 3.0.2 — 2026-09-02
 
