@@ -61,6 +61,52 @@ def main() -> int:
         contains="reused for a new identity",
     )
 
+    # "Fixed" is a judgment everywhere except here: when the baseline item
+    # shipped an executable fix packet, the proof already exists and skipping it
+    # is a choice, not a limitation.
+    run(
+        validator,
+        "evals/durability/revision-invalid-fixed-without-verification.json",
+        "--baseline",
+        "evals/durability/baseline.json",
+        succeeds=False,
+        contains="no --verification was supplied",
+    )
+    run(
+        validator,
+        "evals/durability/revision-valid-fixed-with-verification.json",
+        "--baseline",
+        "evals/durability/baseline.json",
+        "--verification",
+        "evals/durability/verification-fixed.json",
+        contains="fix verification evidence",
+    )
+    # A verification file that records a failing check is not evidence of a fix.
+    with tempfile.TemporaryDirectory(prefix="anti-slop-verification-") as failing_dir:
+        failing = Path(failing_dir) / "verification.json"
+        payload = json.loads((ROOT / "evals" / "durability" / "verification-fixed.json").read_text(encoding="utf-8"))
+        payload["items"][0]["checks"][0]["result"] = "fail"
+        failing.write_text(json.dumps(payload), encoding="utf-8")
+        run(
+            validator,
+            "evals/durability/revision-valid-fixed-with-verification.json",
+            "--baseline",
+            "evals/durability/baseline.json",
+            "--verification",
+            str(failing),
+            succeeds=False,
+            contains="verification checks did not all pass",
+        )
+    # --verification without a baseline has nothing to hold the fix against.
+    run(
+        validator,
+        "evals/durability/revision-valid-fixed-with-verification.json",
+        "--verification",
+        "evals/durability/verification-fixed.json",
+        succeeds=False,
+        contains="--verification requires --baseline",
+    )
+
     with tempfile.TemporaryDirectory(prefix="anti-slop-durability-") as directory:
         temp = Path(directory)
         decisions = temp / "decisions.json"
@@ -334,7 +380,7 @@ def main() -> int:
             print("FAIL: legacy display string must pass through unchanged")
             return 1
 
-    print("PASS: continuity failures are caught, decisions survive migration, complete reports validate, and score rows name canonical categories")
+    print("PASS: continuity failures are caught, fixed items with packets need verification evidence, decisions survive migration, complete reports validate, and score rows name canonical categories")
     return 0
 
 

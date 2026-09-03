@@ -134,7 +134,103 @@ def main() -> int:
         if report["total"]["approved"] != 2 or report["total"]["failed"] != 1:
             raise SystemExit(f"FAIL: outcome totals wrong: {report['total']}")
 
-    print("PASS: brief budget, fix-packet validation, verify dry/execute, outcomes ledger")
+        # 5. --require-fix-packets is opt-in and catches the serious bare finding.
+        #    Default-off is the whole point: registries published before packets
+        #    existed keep validating.
+        bare = copy.deepcopy(registry)
+        for item in bare["items"]:
+            if item["id"] == "AS-01":
+                item["kind"] = "finding"
+                item["status"] = "open"
+                item["severity"] = "critical"
+                item.pop("fix_packet", None)
+        bare_path = tmp / "bare.json"
+        bare_path.write_text(json.dumps(bare), encoding="utf-8")
+        run("scripts/validate_audit.py", str(bare_path), "--context", str(context), contains="PASS")
+        run(
+            "scripts/validate_audit.py",
+            str(bare_path),
+            "--context",
+            str(context),
+            "--require-fix-packets",
+            succeeds=False,
+            contains="open critical or major findings without a fix_packet: AS-01",
+        )
+        packed = copy.deepcopy(bare)
+        for item in packed["items"]:
+            if item["id"] == "AS-01":
+                item["fix_packet"] = packet("true")
+        packed_path = tmp / "packed.json"
+        packed_path.write_text(json.dumps(packed), encoding="utf-8")
+        run(
+            "scripts/validate_audit.py",
+            str(packed_path),
+            "--context",
+            str(context),
+            "--require-fix-packets",
+            contains="fix-packet coverage",
+        )
+
+        # 6. migrate_decisions records what proved the fix, not just the choice.
+        migrated = tmp / "migrated-decisions.json"
+        run(
+            "scripts/migrate_decisions.py",
+            str(decisions_path),
+            str(good_path),
+            str(migrated),
+            "--verification",
+            str(verification),
+            contains="PASS: migrated",
+        )
+        migrated_rows = {row["item_id"]: row for row in json.loads(migrated.read_text(encoding="utf-8"))["decisions"]}
+        reference = migrated_rows["AS-01"].get("verification_ref")
+        if not isinstance(reference, dict) or reference.get("result") != "failed":
+            raise SystemExit(f"FAIL: migrated decision lost its verification_ref: {reference}")
+        if "verification_ref" in migrated_rows.get("AS-03", {}):
+            raise SystemExit("FAIL: verification_ref attached to an item with no verification entry")
+
+        # 7. The dashboard renders the packet and emits an instruction, not just data.
+        dashboard = tmp / "dashboard.html"
+        run(
+            "scripts/render_dashboard.py",
+            str(good_path),
+            str(context),
+            str(decisions_path),
+            str(dashboard),
+            contains="PASS: rendered",
+        )
+        html = dashboard.read_text(encoding="utf-8")
+        for fragment in (
+            "Executable fix packet",
+            "Read the lesson slug from the address",
+            "Revert the routing commit",
+            "needs a person; no tool can pass it",
+            'id="copy-handoff"',
+            "Copy AI handoff",
+            "scripts/verify_fixes.py --execute",
+            "verification.json",
+        ):
+            if fragment not in html:
+                raise SystemExit(f"FAIL: dashboard lost {fragment!r}")
+
+        markdown = tmp / "audit.md"
+        run(
+            "scripts/render_markdown.py",
+            str(good_path),
+            str(context),
+            str(decisions_path),
+            str(markdown),
+            contains="PASS",
+        )
+        report_text = markdown.read_text(encoding="utf-8")
+        for fragment in ("**Executable fix packet**", "- Undo: Revert the routing commit", "**Manual:**", "needs a person"):
+            if fragment not in report_text:
+                raise SystemExit(f"FAIL: Markdown report lost {fragment!r}")
+
+    print(
+        "PASS: brief budget, fix-packet validation and coverage gate, verify dry/execute, "
+        "migrated verification refs, rendered fix packets, dashboard handoff, outcomes ledger"
+    )
     return 0
 
 

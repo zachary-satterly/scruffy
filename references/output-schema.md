@@ -393,6 +393,14 @@ executable so an agent can apply the change and prove it, and a human only
 has to approve. The field is optional per item, forbidden on strengths, and
 validated when present.
 
+`validate_audit.py --require-fix-packets` promotes that expectation to a gate:
+with the flag, every open or needs-verification finding at `critical` or `high`
+severity must carry a valid packet. It is opt-in because registries published
+before packets existed would otherwise stop validating. Both renderers show the
+packet inside the item — target, change, effort, rollback, and each acceptance
+check with its kind — so a reader approves the actual change rather than a
+description of it, and `manual` checks are visibly second-class.
+
 ```json
 "fix_packet": {
   "target": [{"kind": "file", "value": "src/routes.js"}, {"kind": "route", "value": "/lessons/:slug"}],
@@ -423,6 +431,20 @@ browser or agent session through `--results` (`{"ITEM-ID:index": {"result":
 result is `verified`, `failed`, `manual`, or `not_run`. The script never edits
 the registry: `verification.json` is the evidence a later revision cites when
 it records a `fixed` disposition.
+
+`validate_audit.py <current> --baseline <prior> --verification verification.json`
+enforces that citation. Any item whose baseline record was open or
+needs-verification, carried a `fix_packet`, and is now `fixed` needs a
+`verification.json` entry whose non-manual checks all pass — or a typed
+`specialist_review` receipt, or an explicit `verification_override` string on
+the item saying why no executable proof exists. The override renders in the
+dashboard and the Markdown report; a fix excused from proof says so in public.
+Items whose baseline record had no packet keep the judgment-based behaviour in
+[durability.md](durability.md).
+
+`scripts/migrate_decisions.py prior-decisions.json findings.json out.json --verification verification.json`
+attaches a `verification_ref` to each migrated decision, so the decision history
+records what proved the fix and not merely that someone approved it.
 
 `scripts/outcomes.py r1/findings.json r2/findings.json:r2/decisions.json:r2/verification.json --output outcomes.json`
 counts each item once in its latest state and reports, per kind and category,

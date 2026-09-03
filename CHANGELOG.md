@@ -4,6 +4,47 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
+_No unreleased changes._
+
+## 3.1.0 — 2026-09-03
+
+- Closed the fix loop. The audit half was durable and the fix half was not:
+  nothing told an agent to act on an approval, nothing required a fix packet,
+  and nothing required proof before an item was called fixed. On the only real
+  multi-revision project the ledger read `fixed 11, approved 0, verified 0` —
+  the approve→verify path had never run once.
+  - New `references/fix-loop.md` owns the "act on decisions" protocol: when
+    acting on approvals is permitted (an approval is still not write
+    authority), which items are in scope, authoring a missing fix packet before
+    changing anything, running `verify_fixes.py --execute`, and leaving status
+    changes to the next revision. `SKILL.md` §7 and the progressive-disclosure
+    routing paragraph now point at it, and `evals/triggers.json` gains a
+    positive case for implementing approved findings and a negative one for
+    merely summarizing them.
+  - Both renderers show the `fix_packet` inside the item — target, change,
+    effort, rollback, and each acceptance check with its kind — so a reader
+    approves the change rather than a description of it. `manual` checks render
+    as visibly second-class.
+  - `validate_audit.py --require-fix-packets` fails when an open `critical` or
+    `high` finding carries no packet. Opt-in: registries published before
+    packets existed keep validating.
+  - `validate_audit.py --verification verification.json`, with `--baseline`,
+    rejects an item marked `fixed` whose baseline record carried a fix packet
+    unless `verification.json` shows every non-manual check passing, a typed
+    `specialist_review` receipt exists, or the item carries a rendered
+    `verification_override` note. `references/durability.md` step 5 records the
+    rule. Items whose baseline had no packet keep judgment-based behaviour.
+  - `migrate_decisions.py --verification` carries a `verification_ref` onto
+    migrated decisions, so decision history records what proved the fix.
+  - The audit dashboard gains **Copy AI handoff** beside Copy decisions. It
+    copies a paste-ready instruction naming the target, the approved item IDs
+    and titles, `scripts/verify_fixes.py --execute`, and where to write
+    `verification.json`, followed by the decisions JSON. Clipboard failure falls
+    back to the existing download with a status message.
+  - `evals/durability/` gains `revision-invalid-fixed-without-verification.json`,
+    `revision-valid-fixed-with-verification.json`, and `verification-fixed.json`;
+    `test_durability.py`, `test_fix_loop.py`, and `test_product_surfaces.py`
+    cover the new gates, the rendered packets, and the handoff template.
 - Rewrote `README.md` at roughly half the prose. Removed the self-referential
   sections (the naming-history table, "This README is part of the product",
   the "What you get" and "Why the method is harder to fool" lists) and the

@@ -29,6 +29,11 @@ def main() -> int:
         type=Path,
         help="Required for legacy decisions that do not carry immutable identity keys.",
     )
+    parser.add_argument(
+        "--verification",
+        type=Path,
+        help="verification.json from verify_fixes.py; records what proved each approved fix.",
+    )
     args = parser.parse_args()
 
     prior = load(args.prior_decisions)
@@ -72,6 +77,28 @@ def main() -> int:
         prior_target = prior.get("audit", {}).get("target") if isinstance(prior.get("audit"), dict) else prior.get("target")
         if prior_target and prior_target != prior_registry.get("target"):
             raise SystemExit("FAIL: prior decisions target does not match the trusted prior registry")
+    # A decision history that records the choice but not the proof loses the
+    # only fact that distinguishes an approved fix from a shipped one.
+    verification: dict[str, Any] = {}
+    verification_by_id: dict[str, dict[str, Any]] = {}
+    if args.verification:
+        verification = load(args.verification)
+        for row in verification.get("items", []) or []:
+            if isinstance(row, dict) and row.get("id"):
+                verification_by_id[str(row["id"])] = row
+
+    def verification_ref(item_id: str) -> dict[str, Any] | None:
+        row = verification_by_id.get(item_id)
+        if row is None:
+            return None
+        return {
+            "source": str(args.verification),
+            "verified_at": verification.get("verified_at"),
+            "revision_id": verification.get("revision_id"),
+            "result": row.get("result"),
+            "executed_commands": verification.get("executed_commands"),
+        }
+
     migrated_at = datetime.now(timezone.utc).isoformat()
     rows: list[dict[str, Any]] = []
     for item in registry.get("items", []):
@@ -109,6 +136,9 @@ def main() -> int:
                 "destination_id": item.get("destination_id"),
                 "history": [],
             }
+        reference = verification_ref(item_id)
+        if reference is not None:
+            row["verification_ref"] = reference
         rows.append(row)
 
     result = {

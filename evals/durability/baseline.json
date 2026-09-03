@@ -19,13 +19,43 @@
       "last_observed_revision": "r1",
       "observation": "The URL remains unchanged after navigation.",
       "user_impact": "A user cannot share the current state.",
-      "evidence": ["Observed navigation from state one to state two."],
+      "evidence": [
+        "Observed navigation from state one to state two."
+      ],
       "cause": "Internal state has no address contract.",
       "recommendation": "Represent state in the URL.",
-      "acceptance_checks": ["A copied URL opens the same state."],
+      "acceptance_checks": [
+        "A copied URL opens the same state."
+      ],
       "depends_on": [],
       "disposition_reason": "",
-      "destination_id": null
+      "destination_id": null,
+      "fix_packet": {
+        "target": [
+          {
+            "kind": "file",
+            "value": "src/router.js"
+          }
+        ],
+        "change": "Write the active view into the address bar and read it back on load.",
+        "effort": "M",
+        "rollback": "Revert the routing commit; nothing else depends on it.",
+        "acceptance": [
+          {
+            "kind": "command",
+            "run": "npm test -- routing",
+            "expect": {
+              "exit_code": 0
+            },
+            "summary": "routing tests pass",
+            "check_ref": 0
+          },
+          {
+            "kind": "manual",
+            "summary": "a colleague opens a copied URL and sees the same state"
+          }
+        ]
+      }
     },
     {
       "id": "ENH-01",
@@ -41,11 +71,17 @@
       "last_observed_revision": "r1",
       "observation": "No copy-link action is present.",
       "user_impact": "Sharing requires manual explanation.",
-      "evidence": ["Control inventory contains no copy-link action."],
+      "evidence": [
+        "Control inventory contains no copy-link action."
+      ],
       "cause": "The interface lacks addressable state.",
       "recommendation": "Add copy link after routing exists.",
-      "acceptance_checks": ["The copied link opens the same state."],
-      "depends_on": ["AS-01"],
+      "acceptance_checks": [
+        "The copied link opens the same state."
+      ],
+      "depends_on": [
+        "AS-01"
+      ],
       "disposition_reason": "",
       "destination_id": null
     },
@@ -63,7 +99,9 @@
       "last_observed_revision": "r1",
       "observation": "The primary action is visually and semantically clear.",
       "user_impact": "Users can begin without instruction.",
-      "evidence": ["Primary task started without hesitation."],
+      "evidence": [
+        "Primary task started without hesitation."
+      ],
       "cause": "The hierarchy gives one action priority.",
       "recommendation": "Preserve the hierarchy.",
       "acceptance_checks": [],
@@ -73,9 +111,15 @@
     }
   ],
   "presentation": {
-    "prioritized_finding_ids": ["AS-01"],
-    "prioritized_enhancement_ids": ["ENH-01"],
-    "strength_ids": ["STR-01"],
+    "prioritized_finding_ids": [
+      "AS-01"
+    ],
+    "prioritized_enhancement_ids": [
+      "ENH-01"
+    ],
+    "strength_ids": [
+      "STR-01"
+    ],
     "cleared_ids": []
   }
 }

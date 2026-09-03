@@ -10,7 +10,7 @@
       "name": "scruffy",
       "source": "./",
       "description": "Find and fix product, interaction, visual, editorial, accessibility, performance, and structural AI slop with evidence and durable work orders.",
-      "version": "3.0.2"
+      "version": "3.1.0"
     }
   ]
 }
