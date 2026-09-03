@@ -116,8 +116,12 @@ def main(argv: list[str] | None = None) -> int:
         for row in context.get("capabilities", []):
             check_text(f"capabilities[{row.get('key','?')}].scope", row.get("scope"), leads)
         for index, row in enumerate(context.get("checks_not_run", [])):
-            for field in ("reason", "impact"):
-                check_text(f"checks_not_run[{index}].{field}", row.get(field), leads)
+            if isinstance(row, dict):
+                for field in ("reason", "impact"):
+                    check_text(f"checks_not_run[{index}].{field}", row.get(field), leads)
+            else:
+                # Legacy schema-2.0 contexts carry plain strings here.
+                check_text(f"checks_not_run[{index}]", row, leads)
 
     for lead in leads:
         signal = SIGNALS[lead["code"]]

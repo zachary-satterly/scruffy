@@ -73,7 +73,7 @@ def word_count(text: str) -> int:
 
 def decision_for(decisions: dict[str, Any], item_id: str) -> str | None:
     for row in decisions.get("decisions", []) or []:
-        if row.get("finding_id") == item_id:
+        if (row.get("item_id") or row.get("finding_id")) == item_id:
             return str(row.get("decision") or "") or None
     return None
 

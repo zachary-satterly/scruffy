@@ -38,6 +38,8 @@ jobs:
         run: python3 scripts/test_blind_protocol.py
       - name: Test blind-output evaluator
         run: python3 scripts/test_blind_evaluator.py
+      - name: Test the fix loop (brief, fix packets, verify, outcomes)
+        run: python3 scripts/test_fix_loop.py
       - name: Test deterministic sentence blind runner
         run: python3 scripts/test_sentence_blind_runner.py
       - name: Test deterministic web fixtures

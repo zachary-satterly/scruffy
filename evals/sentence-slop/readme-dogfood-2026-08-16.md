@@ -2,7 +2,7 @@
 
 Target: `README.md`
 
-Target SHA-256: `1752334d63fb24b8be0ea9103f3fa7c90f5e52b0cf4272312a921b467e62d31a`
+Target SHA-256: `b35c64a133373e4d81936ea2920418560535363db2d02d5c28e57249ab14b463`
 
 Command:
 
@@ -197,3 +197,31 @@ making the public repository destinations accurate and directly usable.
 **Cleared:** no active editorial-slop finding in the current README. This
 refresh reconciles the hash after the verified GitHub rename and makes no
 authorship assessment.
+
+## Refresh — 2026-09-02 (fix-loop scripts documented)
+
+Prior target hash `1752334d63fb24b8be0ea9103f3fa7c90f5e52b0cf4272312a921b467e62d31a`;
+current `b35c64a133373e4d81936ea2920418560535363db2d02d5c28e57249ab14b463`.
+
+The README changes add three lines to the repository tree listing
+(`render_brief.py`, `verify_fixes.py`, `outcomes.py`) and one command line to
+the repeat-audit recipe (`render_brief.py`). Every added line names an
+executable file that exists in `scripts/` and is covered by
+`scripts/test_fix_loop.py`. No product promise, taxonomy, authority, or
+invocation contract changed.
+
+The English prose analyzer was rerun on the complete README: 3,881 source
+words, 2,073 reader-facing words (the additions are tree and code lines, which
+normalization excludes), 187 sentences, 111 specificity markers, zero
+formulaic scaffolds, and no finding eligibility. The lead set is unchanged:
+`clause_pileup`, `overlong_sentence`, `paragraph_pattern_reuse`,
+`repeated_openings`.
+
+Manual review of the changed lines: the tree comments are three short noun
+phrases that state what each script does in the reader's words ("rendered
+never authored", "runs approved items' executable acceptance checks", "the
+value ledger"); none is portable to an unrelated tool, none makes an
+unsupported claim.
+
+**Cleared:** no active editorial-slop finding in the current README. This
+refresh reconciles the hash and makes no authorship assessment.

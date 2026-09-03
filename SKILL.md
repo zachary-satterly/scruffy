@@ -152,7 +152,9 @@ Ground the ladder before climbing it: when a design-reference search capability 
 
 ## Output
 
-Always return a concise Markdown summary with capability coverage, product framing, prioritized findings, strengths, retractions, and next actions.
+Lead with the decision brief. When files can be written, render it with `python3 scripts/render_brief.py findings.json --context context.json --decisions decisions.json --output brief.md` and return it verbatim; it is a fixed shape — verdict, at most three items to decide, what was cleared, what was not tested — within a 150-word body. Do not write the human summary freehand: prose a human reads first is rendered from the registry so every run reads the same way. When files cannot be written, reproduce that exact shape by hand and say so. The complete Markdown report follows the brief, never replaces it.
+
+Where a finding can be fixed by an agent, attach a `fix_packet` (target, change, effort, rollback, executable acceptance checks) so `scripts/verify_fixes.py` can prove the fix after approval. A prose acceptance check that has no executable form stays `manual` and is visibly second-class. After approvals are acted on, `scripts/outcomes.py` records how many findings became verified fixes; that number, not the finding count, is the audit's value.
 
 When files and an interactive viewer are available, also produce:
 

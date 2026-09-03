@@ -6,12 +6,15 @@ For durable or repeated audits, [references/durability.md](durability.md) is bin
 
 For a substantial file-backed audit, produce:
 
+0. `brief.md` — the rendered decision brief (`scripts/render_brief.py`): verdict, at most three items to decide, cleared suspicions, checks not run, 150-word body. Always returned first; never written freehand.
 1. `findings.json` — complete registry, revision lineage, presentation lists, and run receipt
 2. `context.json` — product frame, tasks, capabilities, routing, assumptions, specialist referrals, category scores, typed evidence, work orders, and checks not run
 3. `decisions.json` — one decision record per finding/enhancement plus history
 4. Markdown report — complete human-readable audit
 5. Self-contained HTML dashboard when a viewer is available
 6. `tokens.json` only when observed token changes are proposed
+7. `verification.json` after approved fixes are applied (`scripts/verify_fixes.py`)
+8. `outcomes.json` across revisions (`scripts/outcomes.py`) — the value ledger
 
 Chat-only work emits the same registry as a JSON block when files are unavailable.
 
@@ -382,6 +385,52 @@ Order approved work by dependency:
 
 Each work order names affected surfaces, registry IDs, dependencies, acceptance checks, and verification method. An audit or dashboard decision is not source-edit authorization unless the user requested implementation.
 
+
+## Fix packet, verification, and outcomes
+
+An acceptance check written as prose is a promise. A `fix_packet` makes it
+executable so an agent can apply the change and prove it, and a human only
+has to approve. The field is optional per item, forbidden on strengths, and
+validated when present.
+
+```json
+"fix_packet": {
+  "target": [{"kind": "file", "value": "src/routes.js"}, {"kind": "route", "value": "/lessons/:slug"}],
+  "change": "Read the lesson slug from the address on load and write it on navigation.",
+  "effort": "M",
+  "rollback": "Revert the routing commit; stored progress is untouched.",
+  "acceptance": [
+    {"kind": "command", "run": "npm test -- routing", "expect": {"exit_code": 0}, "summary": "routing tests pass", "check_ref": 0},
+    {"kind": "dom_state", "selector": "main h1", "expect": {"text_contains": "Lesson 3"}, "summary": "/lessons/3 opens lesson 3", "check_ref": 1},
+    {"kind": "measurement", "metric": "CLS", "expect": {"max": 0.1}, "summary": "layout stays stable"},
+    {"kind": "manual", "summary": "a shared link opens the same lesson for a colleague"}
+  ]
+}
+```
+
+`target[].kind` is `file`, `selector`, `route`, `url`, or `component`. `effort`
+is `S`, `M`, or `L` and surfaces in the brief. `acceptance[].kind` is
+`command` (run from a working directory; passes on the expected exit code and
+optional `stdout_contains`), `dom_state` (selector plus expected state),
+`measurement` (metric plus threshold), or `manual`. `check_ref` optionally
+indexes the prose `acceptance_checks` entry the executable check proves.
+
+`scripts/verify_fixes.py findings.json --decisions decisions.json [--results results.json] [--execute] --output verification.json`
+evaluates only approved open or needs-verification items. Command checks run
+only with `--execute`; `dom_state` and `measurement` results come from a
+browser or agent session through `--results` (`{"ITEM-ID:index": {"result":
+"pass"|"fail", "detail": "..."}}`); `manual` is never a pass. Per item the
+result is `verified`, `failed`, `manual`, or `not_run`. The script never edits
+the registry: `verification.json` is the evidence a later revision cites when
+it records a `fixed` disposition.
+
+`scripts/outcomes.py r1/findings.json r2/findings.json:r2/decisions.json:r2/verification.json --output outcomes.json`
+counts each item once in its latest state and reports, per kind and category,
+raised, approved, verified, fixed, and reopened with approve, verify, and
+reopen rates, plus rules (`principle_refs`/`detector_refs`) raised three or
+more times and never approved. Approve rate says whether findings are worth
+raising; verify rate says whether the fix loop closes; reopen rate says
+whether "fixed" meant fixed.
 
 ## Provenance vocabulary (standardized)
 

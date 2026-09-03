@@ -388,6 +388,47 @@ def validate_editorial_review(review: Any, label: str, *, kind: str, status: str
     return evidence_refs
 
 
+FIX_PACKET_CHECK_KINDS = {"command", "dom_state", "measurement", "manual"}
+FIX_PACKET_TARGET_KINDS = {"file", "selector", "route", "url", "component"}
+FIX_PACKET_EFFORTS = {"S", "M", "L"}
+
+
+def validate_fix_packet(packet: Any, label: str, acceptance_checks: list[Any]) -> None:
+    """A fix packet is optional; when present an agent must be able to act on it."""
+    if not isinstance(packet, dict):
+        fail(f"{label} must be an object")
+    targets = packet.get("target")
+    if not isinstance(targets, list) or not targets:
+        fail(f"{label}.target must be a non-empty array")
+    for index, target in enumerate(targets):
+        if not isinstance(target, dict) or target.get("kind") not in FIX_PACKET_TARGET_KINDS:
+            fail(f"{label}.target[{index}].kind must be one of {sorted(FIX_PACKET_TARGET_KINDS)}")
+        require_text(target.get("value"), f"{label}.target[{index}].value")
+    require_text(packet.get("change"), f"{label}.change")
+    if packet.get("effort") not in FIX_PACKET_EFFORTS:
+        fail(f"{label}.effort must be one of {sorted(FIX_PACKET_EFFORTS)}")
+    require_text(packet.get("rollback"), f"{label}.rollback")
+    acceptance = packet.get("acceptance")
+    if not isinstance(acceptance, list) or not acceptance:
+        fail(f"{label}.acceptance must be a non-empty array")
+    for index, check in enumerate(acceptance):
+        check_label = f"{label}.acceptance[{index}]"
+        if not isinstance(check, dict) or check.get("kind") not in FIX_PACKET_CHECK_KINDS:
+            fail(f"{check_label}.kind must be one of {sorted(FIX_PACKET_CHECK_KINDS)}")
+        kind = check["kind"]
+        if kind == "command":
+            require_text(check.get("run"), f"{check_label}.run")
+        elif kind in {"dom_state", "measurement"}:
+            if not isinstance(check.get("expect"), dict) or not check["expect"]:
+                fail(f"{check_label}.expect must be an object describing the expected state or threshold")
+            require_text(check.get("selector") if kind == "dom_state" else check.get("metric"), f"{check_label}.{'selector' if kind == 'dom_state' else 'metric'}")
+        else:
+            require_text(check.get("summary"), f"{check_label}.summary")
+        check_ref = check.get("check_ref")
+        if check_ref is not None and (not isinstance(check_ref, int) or not 0 <= check_ref < len(acceptance_checks)):
+            fail(f"{check_label}.check_ref must index acceptance_checks")
+
+
 def validate_registry(registry: dict[str, Any], source: str = "registry") -> dict[str, dict[str, Any]]:
     schema_version = registry.get("schema_version")
     if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
@@ -485,6 +526,10 @@ def validate_registry(registry: dict[str, Any], source: str = "registry") -> dic
             fail(f"{label}.evidence cannot be empty")
         if not item["acceptance_checks"] and kind != "strength":
             fail(f"{label}.acceptance_checks cannot be empty")
+        if item.get("fix_packet") is not None:
+            if kind == "strength":
+                fail(f"{label}.fix_packet is not allowed on a strength")
+            validate_fix_packet(item["fix_packet"], f"{label}.fix_packet", item["acceptance_checks"])
         if disposition != "new":
             require_text(item["disposition_reason"], f"{label}.disposition_reason")
         destination = item["destination_id"]

@@ -364,7 +364,10 @@ scruffy/
 │   ├── validate_audit.py         # registry, decisions, and report validation
 │   ├── migrate_decisions.py      # carry decisions into a new revision
 │   ├── render_dashboard.py       # complete self-contained decision dashboard
+│   ├── render_brief.py           # 150-word decision brief, rendered never authored
 │   ├── render_markdown.py        # complete human-readable report
+│   ├── verify_fixes.py           # runs approved items' executable acceptance checks
+│   ├── outcomes.py               # approve / verify / reopen rates: the value ledger
 │   ├── test_durability.py        # continuity and rendering regression tests
 │   ├── test_audit_contract.py    # category, authority, evidence, and editorial-contract tests
 │   ├── test_sentence_slop.py     # sentence-signal and guard regression tests
@@ -417,6 +420,7 @@ Treat `findings.json` as the canonical record and the dashboard as a view of tha
 python3 scripts/migrate_decisions.py previous-decisions.json findings.json decisions.json \
   --prior-registry previous-findings.json
 python3 scripts/render_dashboard.py findings.json context.json decisions.json audit-report.html
+python3 scripts/render_brief.py findings.json --context context.json --decisions decisions.json --output brief.md
 python3 scripts/render_markdown.py findings.json context.json decisions.json audit-report.md
 python3 scripts/validate_audit.py findings.json \
   --context context.json \

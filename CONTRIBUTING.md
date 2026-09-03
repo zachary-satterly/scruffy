@@ -92,6 +92,7 @@ python3 scripts/test_scaffold_audit.py
 python3 scripts/test_blind_protocol.py
 python3 scripts/test_blind_evaluator.py
 python3 scripts/test_sentence_blind_runner.py
+python3 scripts/test_fix_loop.py
 ```
 
 When editing registry tooling, also prove the expected failure. The durability suite includes invalid fixtures for silent omission and ID reuse; add another invalid fixture when introducing a new invariant.
