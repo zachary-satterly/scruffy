@@ -27,7 +27,7 @@
   #list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
   .row{display:flex;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);padding:6px 8px}
   .row b{color:var(--acc);width:20px;flex:none}
-  .row input{flex:1;background:transparent;border:none;border-bottom:1px solid var(--line);color:var(--txt);
+  .row input{flex:1;min-width:0;background:transparent;border:none;border-bottom:1px solid var(--line);color:var(--txt);
              font:inherit;outline:none;padding:2px 0}
   .row input:focus{border-bottom-color:var(--acc)}
   .row button{background:none;border:none;color:var(--dim);cursor:pointer;font:inherit}
@@ -38,6 +38,9 @@
   .btns button:hover{border-color:var(--acc);color:var(--acc)}
   #out{margin-top:12px;width:100%;height:150px;background:var(--panel);border:1px solid var(--line);
        color:var(--dim);font:11px/1.5 inherit;padding:8px;white-space:pre;overflow:auto}
+button:disabled{opacity:.45;cursor:not-allowed}
+  #feedback{margin-top:12px;color:var(--dim)}
+  @media(max-width:720px){body{padding:12px}header{flex-wrap:wrap}#wrap{flex-direction:column}#stage,#side{width:100%}#stage{flex:auto;min-height:240px}.box .tag{max-width:85vw;overflow:hidden;text-overflow:ellipsis}}
 </style>
 </head>
 <body>
@@ -54,7 +57,8 @@
       <button id="md">copy markdown</button>
       <button id="clear">clear boxes</button>
     </div>
-    <textarea id="out" readonly placeholder="export appears here (also copied to clipboard)"></textarea>
+    <p id="feedback" role="status"></p>
+    <textarea id="out" aria-label="Annotation export" readonly placeholder="export appears here (also copied to clipboard)"></textarea>
   </div>
 </div>
 <input type="file" id="file" accept="image/*" hidden>
@@ -62,23 +66,43 @@
 <script>
 const stage=document.getElementById('stage'),img=document.getElementById('img'),
       list=document.getElementById('list'),out=document.getElementById('out');
-let boxes=[],imgName='screenshot';
-
-function loadBlob(b,name){imgName=(name||'screenshot').replace(/\.[^.]+$/,'');
-  img.src=URL.createObjectURL(b);img.hidden=false;stage.classList.remove('empty');boxes=[];render();}
+let boxes=[],imgName='screenshot',loading=false,loadVersion=0;
+const clamp=(n,max)=>Math.max(0,Math.min(max,n));
+function feedback(t){document.getElementById('feedback').textContent=t;}
+function controls(){['png','json','md'].forEach(id=>document.getElementById(id).disabled=loading||img.hidden);document.getElementById('clear').disabled=loading||!boxes.length;}
+function loadBlob(b,name){
+  if(!b||!b.type.startsWith('image/')){feedback('Choose an image file.');return;}
+  const version=++loadVersion,url=URL.createObjectURL(b),candidate=new Image();
+  loading=true;drag=null;controls();feedback('Loading image…');
+  candidate.onload=()=>{
+    if(version!==loadVersion){URL.revokeObjectURL(url);return;}
+    img.onload=()=>{
+      URL.revokeObjectURL(url);img.onload=null;img.onerror=null;
+      if(version!==loadVersion)return;
+      img.hidden=false;stage.classList.remove('empty');
+      imgName=(name||'screenshot').replace(/\.[^.]+$/,'');boxes=[];active=-1;loading=false;out.value='';
+      render();feedback('Image loaded. Drag or press B to add a box.');
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);img.onload=null;img.onerror=null;if(version!==loadVersion)return;loading=false;img.hidden=true;stage.classList.add('empty');boxes=[];active=-1;render();feedback('This image could not be displayed. Choose another image.');};
+    img.src=url;
+  };
+  candidate.onerror=()=>{URL.revokeObjectURL(url);if(version!==loadVersion)return;loading=false;controls();feedback('This image could not be loaded. Choose another image.');};
+  candidate.src=url;
+}
 addEventListener('paste',e=>{const f=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));
   if(f)loadBlob(f.getAsFile(),'pasted');});
 stage.addEventListener('dragover',e=>e.preventDefault());
 stage.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)loadBlob(f,f.name);});
 stage.addEventListener('click',e=>{if(img.hidden)document.getElementById('file').click();});
-document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(f)loadBlob(f,f.name);};
+document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(f)loadBlob(f,f.name);e.target.value='';};
 
 let drag=null;
-stage.addEventListener('mousedown',e=>{if(img.hidden||e.target.closest('.box'))return;
+stage.addEventListener('mousedown',e=>{if(img.hidden||loading||e.button!==0||e.target.closest('.box'))return;
   const r=img.getBoundingClientRect();
-  drag={x0:e.clientX-r.left,y0:e.clientY-r.top,r};e.preventDefault();});
+  if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)return;
+  drag={x0:clamp(e.clientX-r.left,r.width),y0:clamp(e.clientY-r.top,r.height),r};e.preventDefault();});
 addEventListener('mousemove',e=>{if(!drag)return;
-  drag.x1=e.clientX-drag.r.left;drag.y1=e.clientY-drag.r.top;render(drag);});
+  drag.x1=clamp(e.clientX-drag.r.left,drag.r.width);drag.y1=clamp(e.clientY-drag.r.top,drag.r.height);render(drag);});
 addEventListener('mouseup',e=>{if(!drag)return;
   const d=drag;drag=null;if(d.x1==null)return;
   const x=Math.min(d.x0,d.x1),y=Math.min(d.y0,d.y1),w=Math.abs(d.x1-d.x0),h=Math.abs(d.y1-d.y0);
@@ -89,6 +113,7 @@ addEventListener('mouseup',e=>{if(!drag)return;
 let active=-1;
 const say=t=>{document.getElementById('live').textContent=t;};
 stage.addEventListener('keydown',e=>{
+  if(loading)return;
   if(img.hidden){
     if(e.key==='Enter'||e.key===' '){e.preventDefault();document.getElementById('file').click();}
     return;
@@ -114,21 +139,25 @@ stage.addEventListener('keydown',e=>{
 
 function render(live){
   stage.querySelectorAll('.box').forEach(b=>b.remove());
+  controls();list.replaceChildren();
   if(img.hidden)return;
   const r=img.getBoundingClientRect(),off={x:img.offsetLeft,y:img.offsetTop};
   const draw=(x,y,w,h,n,label,isActive)=>{const d=document.createElement('div');
     d.className='box'+(isActive?' active':'');
     Object.assign(d.style,{left:off.x+x+'px',top:off.y+y+'px',width:w+'px',height:h+'px'});
-    d.innerHTML=`<span class="tag">${n}${label?' · '+label:''}</span>`;stage.appendChild(d);};
+    const tag=document.createElement('span');tag.className='tag';tag.textContent=n+(label?' · '+label:'');d.appendChild(tag);stage.appendChild(d);};
   boxes.forEach((b,i)=>draw(b.x*r.width,b.y*r.height,b.w*r.width,b.h*r.height,i+1,b.label,i===active));
   if(live&&live.x1!=null)draw(Math.min(live.x0,live.x1),Math.min(live.y0,live.y1),
     Math.abs(live.x1-live.x0),Math.abs(live.y1-live.y0),boxes.length+1,'');
-  list.innerHTML='';
+  list.replaceChildren();
   boxes.forEach((b,i)=>{const row=document.createElement('div');row.className='row';
-    row.innerHTML=`<b>${i+1}</b><input placeholder="what is this / what's wrong" value="${b.label.replace(/"/g,'&quot;')}"><button>✕</button>`;
+    const number=document.createElement('b');number.textContent=i+1;
+    const input=document.createElement('input');input.placeholder="what is this / what's wrong";input.value=b.label;input.setAttribute('aria-label','Label box '+(i+1));
+    const remove=document.createElement('button');remove.textContent='✕';remove.setAttribute('aria-label','Remove box '+(i+1));
+    row.append(number,input,remove);
     row.querySelector('input').oninput=e=>{b.label=e.target.value;
       stage.querySelectorAll('.tag')[i].textContent=(i+1)+(b.label?' · '+b.label:'');};
-    row.querySelector('button').onclick=()=>{boxes.splice(i,1);render();};
+    row.querySelector('button').onclick=()=>{boxes.splice(i,1);active=Math.min(active,boxes.length-1);render();};
     list.appendChild(row);});
 }
 function focusLast(){const ins=list.querySelectorAll('input');if(ins.length)ins[ins.length-1].focus();}
@@ -138,12 +167,12 @@ function payload(){const W=img.naturalWidth,H=img.naturalHeight;
   return {image:imgName,width:W,height:H,elements:boxes.map((b,i)=>({n:i+1,label:b.label,
     x:Math.round(b.x*W),y:Math.round(b.y*H),w:Math.round(b.w*W),h:Math.round(b.h*H),
     pct:{x:+(b.x*100).toFixed(1),y:+(b.y*100).toFixed(1),w:+(b.w*100).toFixed(1),h:+(b.h*100).toFixed(1)}}))};}
-function show(t){out.value=t;navigator.clipboard?.writeText(t).catch(()=>{});}
+async function show(t){out.value=t;try{if(!navigator.clipboard?.writeText)throw new Error('unavailable');await navigator.clipboard.writeText(t);feedback('Copied to clipboard.');}catch{feedback('Clipboard unavailable. Select and copy the export below.');out.focus();out.select();}}
 document.getElementById('json').onclick=()=>show(JSON.stringify(payload(),null,2));
 document.getElementById('md').onclick=()=>{const p=payload();
   show(`Screenshot: ${p.image} (${p.width}×${p.height})\n`+p.elements.map(e=>
    `${e.n}. [${e.pct.x}%,${e.pct.y}% ${e.pct.w}×${e.pct.h}%] ${e.label||'(unlabeled)'}`).join('\n'));};
-document.getElementById('clear').onclick=()=>{boxes=[];render();};
+document.getElementById('clear').onclick=()=>{boxes=[];active=-1;out.value='';render();feedback('Boxes cleared.');};
 document.getElementById('png').onclick=()=>{if(img.hidden)return;
   const c=document.createElement('canvas'),W=img.naturalWidth,H=img.naturalHeight;
   c.width=W;c.height=H;const g=c.getContext('2d');g.drawImage(img,0,0);
@@ -153,6 +182,7 @@ document.getElementById('png').onclick=()=>{if(img.hidden)return;
     g.fillStyle='#ff5b04';g.fillRect(x-s,y-s*9,tw,s*9);g.fillStyle='#111';g.fillText(t,x-s,y-s*2.4);});
   const a=document.createElement('a');a.download=imgName+'-annotated.png';a.href=c.toDataURL();a.click();};
 addEventListener('resize',()=>render());
+controls();
 </script>
 </body>
 </html>

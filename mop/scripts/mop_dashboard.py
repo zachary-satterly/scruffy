@@ -31,6 +31,7 @@ import json
 import sys
 from pathlib import Path
 
+from mop_directions import direction_is_draft
 from mop_bundle import TERMINAL_STATUSES, InteropError, build_plan, load_bundle, load_interop
 
 # ASSETS SCHEMA (JSON) — same as before:
@@ -41,10 +42,6 @@ from mop_bundle import TERMINAL_STATUSES, InteropError, build_plan, load_bundle,
 #   "directions":  {"ITEM_ID":{"recommended":..,"principle":..,"alternates":[..]}}
 # }
 
-_MIME_BY_EXT = {
-    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-    ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml",
-}
 _DECISIONS = ("approve", "defer", "reject", "pending")
 _DECISION_LABEL = {"approve": "Approve", "defer": "Defer", "reject": "Reject", "pending": "Pending"}
 _ACTIONABLE_KINDS = ("finding", "enhancement")
@@ -102,12 +99,31 @@ def category_label(key: str) -> str:
     return f"{label} ({key})" if label else str(key)
 
 
-def _data_uri(path: Path, mime: str | None) -> str:
-    if mime is None:
-        mime = _MIME_BY_EXT.get(path.suffix.lower())
-    if mime is None:
-        raise InteropError(f"cannot infer MIME for {path.name}; add \"mime\" to its asset entry")
-    return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+def _data_uri(path: Path, mime: str | None, base: Path | None = None) -> str:
+    """Embed only bounded, signature-checked raster evidence."""
+    resolved = path.resolve()
+    if base is not None and not resolved.is_relative_to(base.resolve()):
+        raise InteropError("image evidence escapes the declared asset directory")
+    try:
+        with resolved.open("rb") as stream:
+            data = stream.read(25 * 1024 * 1024 + 1)
+    except OSError as exc:
+        raise InteropError(f"cannot read image evidence: {exc}") from exc
+    if len(data) > 25 * 1024 * 1024:
+        raise InteropError("image evidence exceeds 25 MiB")
+    detected = None
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        detected = "image/png"
+    elif data.startswith(b"\xff\xd8\xff"):
+        detected = "image/jpeg"
+    elif data.startswith((b"GIF87a", b"GIF89a")):
+        detected = "image/gif"
+    elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        detected = "image/webp"
+    if detected is None or (mime is not None and mime != detected):
+        raise InteropError("image evidence must be PNG, JPEG, GIF or WebP with a matching MIME")
+    return f"data:{detected};base64," + base64.b64encode(data).decode("ascii")
+
 
 
 def _resolve_preflight(assets: dict, base: Path) -> dict | None:
@@ -175,12 +191,12 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
         1 for item in ordered_items
         if item.get("kind", "finding") in _ACTIONABLE_KINDS and item.get("status") in TERMINAL_STATUSES
     )
-    shot_uri = {s["path"]: _data_uri(base / s["path"], s.get("mime")) for s in screenshots}
-    ref_uri = {r["path"]: _data_uri(base / r["path"], r.get("mime")) for r in references}
+    shot_uri = {s["path"]: _data_uri(base / s["path"], s.get("mime"), base) for s in screenshots}
+    ref_uri = {r["path"]: _data_uri(base / r["path"], r.get("mime"), base) for r in references}
 
     p: list[str] = [_HEAD]
     p.append('<div class="wrap">')
-    brand = Path(__file__).resolve().parent.parent.parent / "assets" / "scruffy-hero.png"
+    brand = Path(__file__).resolve().parent.parent / "assets" / "scruffy-sweeping-unified.png"
     if brand.exists():
         p.append(f'<img class="brand" src="{_data_uri(brand, "image/png")}" '
                  'alt="Scruffy sweeping a field of cartoon nuts and bolts">')
@@ -230,6 +246,9 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
             p.append('<div class="ibody"><div class="dirs">')
             for d in g.get("directions", []):
                 did = d.get("id", "")
+                draft = direction_is_draft(d)
+                unavailable_image = "visual" in g.get("categories", []) and not any(ref.get("image") for ref in d.get("grounding", []))
+                disabled = draft or unavailable_image
                 on = " on" if sel == did else ""
                 recommended = '<span class="tag">Recommended</span> ' if d.get("recommended") else ""
                 ground_bits = []
@@ -241,7 +260,7 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
                         if not ipath.is_absolute():
                             ipath = bundle_base / ipath
                         if ipath.exists() and ipath.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
-                            img_html = f'<img class="gimg" src="{_data_uri(ipath, None)}" alt="{_e(ref.get("source",""))}">'
+                            img_html = f'<img class="gimg" src="{_data_uri(ipath, None, bundle_base)}" alt="{_e(ref.get("source",""))}">'
                     origin = ref.get("origin", "")
                     origin_html = f'<span class="obadge">{_e(origin.replace("_", " "))}</span> ' if origin else ""
                     ground_bits.append(
@@ -252,8 +271,8 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
                 principles = "; ".join(credit_reference(x) for x in d.get("principle_refs", []))
                 p.append(
                     f'<label class="dir{on}" data-direction-id="{_e(did)}">'
-                    f'<input type="radio" name="dir-{_e(gid)}" value="{_e(did)}"{" checked" if sel == did else ""}>'
-                    f'<span class="dtitle">{recommended}{_e(d.get("title",""))}</span>'
+                    f'<input type="radio" name="dir-{_e(gid)}" value="{_e(did)}"{" checked" if sel == did and not disabled else ""}{" disabled" if disabled else ""}>'
+                    f'<span class="dtitle">{"Draft — unavailable for selection. " if disabled else ""}{recommended}{_e(d.get("title",""))}</span>'
                     f'<span class="dmeta">{_e(d.get("paradigm",""))} &middot; {_e(d.get("material",""))}</span>'
                     + (f'<span class="dmeta">Principle: {_e(principles)}</span>' if principles else "")
                     + f'<p class="txt">{_e(d.get("thesis",""))}</p>'
@@ -361,7 +380,7 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
                 if not ipath.is_absolute() and bundle_base is not None:
                     ipath = bundle_base / loc
                 if ipath.exists() and ipath.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
-                    p.append(f'<figure class="shot"><img src="{_data_uri(ipath, None)}" '
+                    p.append(f'<figure class="shot"><img src="{_data_uri(ipath, None, bundle_base)}" '
                              f'alt="{_e(asset.get("description", asset["id"]))}">'
                              f'<figcaption>{_e(asset.get("description", ""))} ({_e(asset["id"])})</figcaption></figure>')
                 else:

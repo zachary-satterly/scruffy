@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,26 @@ ARTIFACTS = {
 
 class InteropError(Exception):
     """A bundle violates the consumer compatibility key or is unreadable."""
+
+
+def resolve_scruffy_root() -> Path:
+    """Resolve the canonical installation; never copy its audit schema into Mop."""
+    configured = os.environ.get("SCRUFFY_ROOT")
+    root = Path(configured).expanduser().resolve() if configured else REPO_ROOT.parent
+    required = ("SKILL.md", "schema/audit-contract.json", "scripts/validate_audit.py", "scripts/verify_fixes.py")
+    if not all((root / name).is_file() for name in required):
+        raise InteropError("Scruffy canonical installation is unavailable; set SCRUFFY_ROOT to the Scruffy repository/plugin root containing SKILL.md, schema/audit-contract.json, scripts/validate_audit.py and scripts/verify_fixes.py")
+    return root
+
+
+def canonical_verification(path: Path, findings: dict, decisions: dict) -> dict:
+    """Ask Scruffy to validate receipt integrity; this never executes checks."""
+    root = resolve_scruffy_root()
+    command = [sys.executable, "-c", "import sys,json;sys.path.insert(0,sys.argv[1]);from validate_audit import validate_verification_receipt;data=json.load(sys.stdin);print(json.dumps(validate_verification_receipt(data['receipt'],data['findings'],data['decisions'])))", str(root / "scripts")]
+    result = subprocess.run(command, input=json.dumps({"receipt": _read_json(path), "findings": findings, "decisions": decisions}), text=True, capture_output=True)
+    if result.returncode:
+        raise InteropError("verification receipt failed canonical validation: " + " ".join((result.stdout + result.stderr).split()))
+    return json.loads(result.stdout)
 
 
 # A finding already in one of these states has nothing left to implement.
@@ -162,6 +183,8 @@ def validate_versions(bundle: dict, interop: dict) -> list[str]:
     for name, doc in present:
         spec = consumes[name]
         current, accepted = _accepted_versions(spec)
+        if not isinstance(doc, dict):
+            raise InteropError(f"{name} must be a JSON object")
         version = str(doc.get("schema_version", "")).strip()
         if not version:
             raise InteropError(f"{name} has no schema_version")
@@ -202,7 +225,7 @@ def _validate_canonical_current_context(
                 "legacy contexts retain their read-only compatibility path"
             )
         return
-    validator = REPO_ROOT.parent / "scripts" / "validate_audit.py"
+    validator = resolve_scruffy_root() / "scripts" / "validate_audit.py"
     if not validator.is_file():
         raise InteropError(
             "Scruffy canonical context validator is unavailable; disclose the gap and stop"
@@ -242,12 +265,24 @@ def _validate_canonical_current_context(
 
 def _check_cross_references(bundle: dict) -> None:
     """Every decision must reference a real registry item."""
-    item_ids = {it["id"] for it in bundle["findings"].get("items", [])}
-    for dec in bundle["decisions"].get("decisions", []):
+    items = bundle["findings"].get("items")
+    decisions = bundle["decisions"].get("decisions")
+    if not isinstance(items, list) or any(not isinstance(it, dict) or not isinstance(it.get("id"), str) for it in items):
+        raise InteropError("findings.items must contain objects with string IDs")
+    item_ids = {it["id"] for it in items}
+    if not isinstance(decisions, list):
+        raise InteropError("decisions.json decisions must be an array")
+    seen = set()
+    for dec in decisions:
+        if not isinstance(dec, dict) or not isinstance(dec.get("item_id"), str):
+            raise InteropError("decisions entries must contain a string item_id")
+        if not isinstance(dec.get("decision"), str) or dec["decision"] not in {"approve", "pending", "defer", "reject"}:
+            raise InteropError("decisions entry has an invalid decision")
+        if dec["item_id"] in seen:
+            raise InteropError(f"duplicate decision for {dec['item_id']}")
+        seen.add(dec["item_id"])
         if dec["item_id"] not in item_ids:
-            raise InteropError(
-                f"decisions.json references unknown item {dec['item_id']!r}"
-            )
+            raise InteropError(f"decisions.json references unknown item {dec['item_id']!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -444,31 +479,35 @@ def _synthesize_plan(actionable: list, actionable_ids: set, ordering: dict):
 
 
 def _plan_from_work_orders(orders: list, items: dict, actionable_ids: set, ordering: dict):
-    """Honor Scruffy's explicit work-order order; drop non-approved items."""
-    warnings: list[str] = []
-    steps: list[dict] = []
-    seen: set = set()
-    ordered_orders = sorted(orders, key=lambda o: o.get("lane", 99))
-    for order in ordered_orders:
-        wo_id = order.get("id")
+    """Apply explicit order only among nodes whose prerequisites are ready."""
+    ranks = {}
+    for order in sorted(orders, key=lambda o: o.get("lane", 99)):
         for item_id in order.get("item_ids", []):
-            if item_id not in actionable_ids:
-                continue
-            if item_id in seen:
-                continue
-            it = items[item_id]
-            steps.append(_step(it, order.get("lane", _lane_for(it, ordering)), wo_id))
-            seen.add(item_id)
-    # Any approved item not covered by a work order is appended by synthesis.
-    uncovered = [items[i] for i in actionable_ids if i not in seen]
+            if item_id in actionable_ids and item_id not in ranks:
+                ranks[item_id] = (len(ranks), order)
+    warnings = []
+    dependencies = {}
+    for item_id in actionable_ids:
+        deps = set(items[item_id].get("depends_on", []))
+        dependencies[item_id] = deps & actionable_ids
+        for dep in sorted(deps - actionable_ids):
+            warnings.append(f"{item_id} depends on {dep}, which is not in the approved set; implement or re-audit that dependency first")
+    def priority(item_id):
+        return (0, ranks[item_id][0]) if item_id in ranks else (1, _lane_for(items[item_id], ordering), _severity_rank(items[item_id], ordering), item_id)
+    steps = []
+    while dependencies:
+        ready = [item_id for item_id, deps in dependencies.items() if not deps]
+        if not ready:
+            raise InteropError(f"depends_on cycle among approved items: {sorted(dependencies)}")
+        item_id = min(ready, key=priority)
+        order = ranks.get(item_id, (None, {}))[1]
+        steps.append(_step(items[item_id], order.get("lane", _lane_for(items[item_id], ordering)), order.get("id")))
+        del dependencies[item_id]
+        for deps in dependencies.values():
+            deps.discard(item_id)
+    uncovered = actionable_ids - ranks.keys()
     if uncovered:
-        tail, tail_warn = _synthesize_plan(uncovered, actionable_ids, ordering)
-        warnings.extend(tail_warn)
-        warnings.append(
-            f"{len(uncovered)} approved item(s) were not in any work order; "
-            f"appended by synthesized order"
-        )
-        steps.extend(tail)
+        warnings.append(f"{len(uncovered)} approved item(s) were not in any work order; dependency-ordered with synthesized priorities")
     return steps, warnings
 
 

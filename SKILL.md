@@ -158,9 +158,9 @@ Lead with the decision brief. When files can be written, render it with `python3
 
 Every critical or major open finding whose target file an agent can name is expected to carry a `fix_packet` (target, change, effort, rollback, executable acceptance checks) so `scripts/verify_fixes.py` can prove the fix after approval; `validate_audit.py --require-fix-packets` enforces that expectation on demand. A prose acceptance check that has no executable form stays `manual` and is visibly second-class. After approvals are acted on, `scripts/outcomes.py` records how many findings became verified fixes; that number, not the finding count, is the audit's value.
 
-When files and an interactive viewer are available, also produce:
+When an artifact directory can be written, also produce the durable files below; add HTML when an interactive viewer is available:
 
-- A self-contained HTML decision report
+- A self-contained HTML decision report when a viewer is available
 - `findings.json` containing the complete durable registry and presentation lists
 - `context.json` containing the run-linked product frame, task ledger, capabilities, category scores, typed evidence receipts, work orders, and checks not run
 - In context schema 1.2, the complete routing ledger, assumption ledger, and specialist referrals
@@ -176,9 +176,7 @@ like a new repair queue.
 
 For a blind run, also produce `blind-manifest.json`, `blind-discovery.json`, and `blind-freeze.json`; add `blind-reconciliation.json` only after the reveal phase. State whether blindness was verified, contaminated, or not run.
 
-Artifacts follow capability, not judgement. When `source_write` is available, `findings.json`, `context.json`, `decisions.json` and the Markdown report are **required**; none of them needs a viewer. The HTML dashboard is required whenever files can be written at all, since it is a file. An artifact that was not produced is named with the capability that prevented it, never omitted silently — a missing artifact and one nobody thought about look identical otherwise.
-
-When those capabilities are unavailable, emit the same information as Markdown plus a complete registry JSON block. Never make an HTML dashboard a prerequisite for completing an audit.
+Use the capability table in [references/output-schema.md](references/output-schema.md) as the single artifact rule. Permission to write audit artifacts is distinct from `source_write` permission to edit the target. JSON and Markdown need no viewer; an unavailable viewer never blocks an audit. Disclose each output fallback and each check not run. A scaffold validates structure only; replace its TODOs and record actual observations before reporting completion.
 
 Follow the exact schema and fallback behavior in [references/output-schema.md](references/output-schema.md).
 

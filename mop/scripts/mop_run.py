@@ -65,7 +65,7 @@ def main(argv=None) -> int:
     directions_path = bundle_dir / "directions.json"
     if directions_path.exists():
         directions = json.loads(directions_path.read_text(encoding="utf-8"))
-        notes = check_directions(directions, plan, bundle=bundle, bundle_dir=bundle_dir)
+        notes = check_directions(directions, plan, bundle=bundle, bundle_dir=bundle_dir, allow_unselected_drafts=True)
         directions_state = "checked"
     else:
         directions = scaffold_directions(

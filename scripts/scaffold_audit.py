@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Emit a pre-valid Scruffy audit bundle (findings/context/decisions) to edit in place.
+"""Emit a structurally valid draft Scruffy audit bundle to a new directory.
 
-The emitted trio passes validate_audit.py as-is, so an audit session starts from
-green and every subsequent edit is a small diff against a valid document instead
-of a multi-round negotiation with the validator. Placeholders are marked TODO.
+The emitted trio passes structural validation but contains no audit conclusions.
+Placeholders are marked TODO; checks start not_run and scores start N/A.
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from audit_contract import load_contract, mode_map
@@ -124,7 +124,7 @@ def build(
         {
             "id": "EV-1",
             "kind": "supplied",
-            "verification": "observed",
+            "verification": "not_verified",
             "locator": "https://example.invalid/replace-with-real-evidence",
             "description": "TODO: replace with the first typed evidence receipt.",
         }
@@ -201,9 +201,9 @@ def build(
             for key, question in FRAME
         ],
         "tasks": [
-            {"id": "T1", "goal": "TODO: primary task", "result": "TODO", "status": "partial", "evidence_refs": [seed_evidence_id]},
-            {"id": "T2", "goal": "TODO: recovery or error path", "result": "TODO", "status": "partial", "evidence_refs": [seed_evidence_id]},
-            {"id": "T3", "goal": "TODO: repeat-use or persistence task", "result": "TODO", "status": "partial", "evidence_refs": [seed_evidence_id]},
+            {"id": "T1", "goal": "TODO: primary task", "result": "TODO", "status": "not_run", "evidence_refs": [seed_evidence_id]},
+            {"id": "T2", "goal": "TODO: recovery or error path", "result": "TODO", "status": "not_run", "evidence_refs": [seed_evidence_id]},
+            {"id": "T3", "goal": "TODO: repeat-use or persistence task", "result": "TODO", "status": "not_run", "evidence_refs": [seed_evidence_id]},
         ],
         "capabilities": [
             {
@@ -244,7 +244,7 @@ def build(
         "assumptions": [],
         "referrals": [],
         "scores": [
-            {"category": category, "score": 1, "evidence": "TODO: evidence for this category's score.", "evidence_refs": [seed_evidence_id]}
+            {"category": category, "score": "N/A", "evidence": "TODO: evidence for this category's score.", "evidence_refs": [seed_evidence_id]}
             for category in CATEGORIES
         ],
         "work_orders": [],
@@ -291,6 +291,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-validate", action="store_true", help="Skip the self-validation pass")
     args = parser.parse_args(argv)
 
+    for name in ("audit_id", "target", "title"):
+        if not getattr(args, name).strip():
+            parser.error(f"--{name.replace('_', '-')} must not be blank")
+    if args.out.exists() or args.out.is_symlink():
+        parser.error("--out must be a new directory; existing audit bundles are never overwritten")
     prefix = args.item_prefix or "".join(c for c in args.audit_id.upper() if c.isalnum())[:3] or "AUD"
     if not ITEM_PREFIX.fullmatch(prefix):
         parser.error(
@@ -312,27 +317,39 @@ def main(argv: list[str] | None = None) -> int:
         args.repository_write_authority,
         screenshots,
     )
-    args.out.mkdir(parents=True, exist_ok=True)
-    for source, destination in screenshots:
-        target = args.out / destination
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
-    for name, data in (("findings.json", registry), ("context.json", context), ("decisions.json", decisions)):
-        (args.out / name).write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".scruffy-scaffold-", dir=args.out.parent) as raw:
+        staging = Path(raw) / "bundle"
+        staging.mkdir()
+        for source, destination in screenshots:
+            target = staging / destination
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+        for name, data in (("findings.json", registry), ("context.json", context), ("decisions.json", decisions)):
+            (staging / name).write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    if not args.no_validate:
-        proc = subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "validate_audit.py"),
-             str(args.out / "findings.json"),
-             "--context", str(args.out / "context.json"),
-             "--decisions", str(args.out / "decisions.json")],
-            capture_output=True, text=True,
-        )
-        if proc.returncode != 0:
-            print(proc.stdout + proc.stderr, file=sys.stderr)
-            print("FAIL: scaffold did not self-validate; this is a scaffolder bug", file=sys.stderr)
-            return 1
-    print(f"PASS: pre-valid audit bundle written to {args.out}")
+        if not args.no_validate:
+            proc = subprocess.run(
+                [sys.executable, str(ROOT / "scripts" / "validate_audit.py"),
+                 str(staging / "findings.json"),
+                 "--context", str(staging / "context.json"),
+                 "--decisions", str(staging / "decisions.json")],
+                capture_output=True, text=True,
+            )
+            if proc.returncode != 0:
+                print(proc.stdout + proc.stderr, file=sys.stderr)
+                print("FAIL: scaffold did not self-validate; this is a scaffolder bug", file=sys.stderr)
+                return 1
+        # Publish only after all copies and validation succeed. mkdir reserves
+        # the destination so a concurrently created bundle is never replaced.
+        args.out.mkdir()
+        try:
+            staging.replace(args.out)
+        except OSError:
+            args.out.rmdir()
+            raise
+    validation = "validation skipped" if args.no_validate else "structure validated"
+    print(f"PASS: draft audit bundle ({validation}; audit not performed) written to {args.out}")
     return 0
 
 

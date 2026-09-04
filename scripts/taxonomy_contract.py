@@ -72,6 +72,11 @@ def load_taxonomy(path: Path = MANIFEST) -> dict[str, Any]:
     if len(projected) != len(set(projected)) or set(projected) != set(category_keys):
         raise ValueError("inspection layers must project every category exactly once")
 
+    projected_layers = {key: layer["key"] for layer in layers for key in layer["category_keys"]}
+    for row in categories:
+        if projected_layers[row["key"]] != row["inspection_layer"]:
+            raise ValueError(f"category {row['key']} inspection_layer contradicts its layer membership")
+
     aliases = data.get("legacy_category_aliases")
     if not isinstance(aliases, dict) or any(value not in category_keys for value in aliases.values()):
         raise ValueError("legacy category aliases must target canonical keys")
@@ -200,7 +205,7 @@ def replace_readme_block(text: str, rendered: str) -> str:
         re.S,
     )
     if pattern.search(text):
-        return pattern.sub(rendered, text)
+        return pattern.sub(lambda match: rendered, text)
     heading = re.search(r"(?ms)^## The seven slop categories\n.*?(?=^## Why the method is harder to fool\n)", text)
     if not heading:
         raise ValueError("README taxonomy section or generated markers were not found")

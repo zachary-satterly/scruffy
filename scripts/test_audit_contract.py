@@ -345,6 +345,8 @@ def main() -> int:
         prior_decisions_path = base / "decisions-r1.json"
         current_registry_path = base / "findings-r2.json"
         migrated_decisions_path = base / "decisions-r2.json"
+        prior_registry_path = base / "findings-r1.json"
+        prior_registry_path.write_text(json.dumps(registry), encoding="utf-8")
         prior_decisions_path.write_text(json.dumps(decisions), encoding="utf-8")
         current_registry = copy.deepcopy(registry)
         current_registry["revision_id"] = "r2"
@@ -360,6 +362,7 @@ def main() -> int:
                 str(prior_decisions_path),
                 str(current_registry_path),
                 str(migrated_decisions_path),
+                "--prior-registry", str(prior_registry_path),
             ],
             text=True,
             capture_output=True,
@@ -758,7 +761,7 @@ def main() -> int:
         expect_failure(registry, shot_claimed, base, "captured no screenshot evidence asset")
 
         shot_file = base / "capture.png"
-        shot_file.write_bytes(b"synthetic")
+        shot_file.write_bytes((Path(__file__).resolve().parents[1] / "assets" / "scruffy-hero.png").read_bytes())
         shot_context = copy.deepcopy(context)
         shot_context["evidence_assets"].append(
             {

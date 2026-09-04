@@ -7,7 +7,6 @@ import argparse
 import json
 import re
 import sys
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +31,7 @@ def dispositions(discovery: dict[str, Any]) -> tuple[dict[str, str], list[str]]:
             problems.append(f"{field} must be a list")
             continue
         for index, entry in enumerate(entries):
-            if not isinstance(entry, dict) or not isinstance(entry.get("sample_id"), str):
+            if not isinstance(entry, dict) or not isinstance(entry.get("sample_id"), str) or not entry["sample_id"].strip():
                 problems.append(f"{field}[{index}] needs sample_id")
                 continue
             sample_id = entry["sample_id"]
@@ -44,20 +43,42 @@ def dispositions(discovery: dict[str, Any]) -> tuple[dict[str, str], list[str]]:
                 if not isinstance(candidate_id, str) or not re.fullmatch(r"CAND-\d{3}", candidate_id):
                     problems.append(f"candidate for {sample_id} lacks a temporary CAND- ID")
                 signals = entry.get("signals")
-                if not isinstance(signals, list) or len(set(signals)) < 2:
+                if (not isinstance(signals, list)
+                        or not all(isinstance(signal, str) and signal.strip() for signal in signals)
+                        or len({signal.strip() for signal in signals}) < 2):
                     problems.append(f"candidate for {sample_id} needs two independent signals")
-                for required in ("evidence", "consequence", "counterexample_tested", "confidence"):
-                    if not entry.get(required):
+                evidence = entry.get("evidence")
+                if not isinstance(evidence, list) or not evidence or not all(isinstance(value, str) and value.strip() for value in evidence):
+                    problems.append(f"candidate for {sample_id} needs nonempty quoted evidence strings")
+                for required in ("consequence", "counterexample_tested", "confidence"):
+                    if not isinstance(entry.get(required), str) or not entry[required].strip():
                         problems.append(f"candidate for {sample_id} lacks {required}")
     return coverage, problems
 
 
-def evaluate_one(path: Path, key: dict[str, Any]) -> dict[str, Any]:
-    discovery = load_object(path)
-    coverage, problems = dispositions(discovery)
+def validate_key(key: dict[str, Any]) -> dict[str, Any]:
     expectations = key.get("sample_expectations")
-    if not isinstance(expectations, dict):
-        raise ValueError("evaluation key needs sample_expectations")
+    if not isinstance(expectations, dict) or not expectations:
+        raise ValueError("evaluation key needs nonempty sample_expectations")
+    for sample_id, expectation in expectations.items():
+        if (not isinstance(sample_id, str) or not sample_id.strip()
+                or not isinstance(expectation, dict)
+                or expectation.get("expected_disposition") not in ("candidate", "cleared", "not_run")):
+            raise ValueError("evaluation key has an invalid sample expectation")
+    return expectations
+
+
+def evaluate_one(path: Path, key: dict[str, Any]) -> dict[str, Any]:
+    expectations = validate_key(key)
+    try:
+        discovery = load_object(path)
+    except (OSError, ValueError) as error:
+        return {
+            "path": str(path.resolve()), "agent": None, "passed": False,
+            "matched_samples": [], "mismatches": [],
+            "integrity_problems": [str(error)], "dispositions": {},
+        }
+    coverage, problems = dispositions(discovery)
     if discovery.get("phase") != "blind_discovery":
         problems.append("phase must be blind_discovery")
     if discovery.get("authorship_assessment") != "not_performed":
@@ -98,6 +119,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         key = load_object(args.key)
+        validate_key(key)
+        if args.output and args.output.resolve() in {path.resolve() for path in [args.key, *args.discovery]}:
+            raise ValueError("--output must not overwrite an input artifact")
         results = [evaluate_one(path, key) for path in args.discovery]
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"FAIL: {error}", file=sys.stderr)

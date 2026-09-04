@@ -91,7 +91,9 @@ python3 scripts/check.py
 ```
 
 This runs the package validators and every `test_*.py` script in `scripts/`
-and `mop/scripts/`, including newly added regression suites. Use
+and `mop/scripts/`, including newly added regression suites. Python tests use only
+the standard library. Dashboard JavaScript tests also use Node (no npm packages);
+they explicitly skip locally if Node is absent, and CI requires Node. Use
 `python3 scripts/check.py --list` to inspect the exact checks.
 
 When Claude Code is installed, also run `claude plugin validate .`. If behavior

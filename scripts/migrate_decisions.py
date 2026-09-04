@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from audit_contract import load_contract
+from validate_audit import validate_registry, validate_decisions, validate_baseline, validate_verification_receipt
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -46,6 +47,7 @@ def main() -> int:
     if registry.get("schema_version") not in supported_registry_versions:
         raise SystemExit(f"FAIL: registry must use one of {sorted(supported_registry_versions)}")
 
+    validate_registry(registry, "registry")
     prior_registry: dict[str, Any] | None = None
     if args.prior_registry:
         prior_registry = load(args.prior_registry)
@@ -61,14 +63,34 @@ def main() -> int:
             "FAIL: legacy decisions lack immutable identity keys; provide --prior-registry so IDs can be bound to a trusted baseline"
         )
 
+    modern = prior.get("schema_version") in supported_registry_versions
+    same_revision = prior.get("revision_id") == registry.get("revision_id")
+    if modern:
+        if prior.get("audit_id") != registry.get("audit_id"):
+            raise SystemExit("FAIL: prior decisions audit_id does not match registry")
+        expected_revision = registry.get("revision_id") if same_revision else registry.get("baseline_revision_id")
+        if not expected_revision or prior.get("revision_id") != expected_revision:
+            raise SystemExit("FAIL: prior decisions revision does not match current or baseline revision")
+        if not same_revision and prior_registry is None:
+            raise SystemExit("FAIL: cross-revision decisions require --prior-registry to verify immutable identity")
+        validate_decisions(prior, registry if same_revision else prior_registry)
+    if prior_registry is not None:
+        validate_registry(prior_registry, "prior registry")
+        validate_baseline(registry, prior_registry)
+
     prior_rows = prior.get("decisions", [])
     if not isinstance(prior_rows, list):
         raise SystemExit("FAIL: prior decisions must contain a decisions array")
-    prior_by_id = {
-        row.get("item_id") or row.get("finding_id"): row
-        for row in prior_rows
-        if isinstance(row, dict) and (row.get("item_id") or row.get("finding_id"))
-    }
+    prior_by_id = {}
+    for row in prior_rows:
+        if not isinstance(row, dict):
+            raise SystemExit("FAIL: prior decision rows must be objects")
+        item_id = row.get("item_id") or row.get("finding_id")
+        if not isinstance(item_id, str) or not item_id or item_id in prior_by_id:
+            raise SystemExit("FAIL: prior decisions contain missing or duplicate item IDs")
+        if row.get("decision") not in {"approve", "defer", "reject", "pending"}:
+            raise SystemExit("FAIL: prior decision is invalid")
+        prior_by_id[item_id] = row
     if prior_registry is not None:
         trusted_ids = {item.get("id") for item in prior_registry.get("items", []) if isinstance(item, dict)}
         unknown = sorted(set(prior_by_id) - trusted_ids)
@@ -83,9 +105,9 @@ def main() -> int:
     verification_by_id: dict[str, dict[str, Any]] = {}
     if args.verification:
         verification = load(args.verification)
-        for row in verification.get("items", []) or []:
-            if isinstance(row, dict) and row.get("id"):
-                verification_by_id[str(row["id"])] = row
+        verification_by_id = validate_verification_receipt(
+            verification, prior_registry or registry, prior if modern else None
+        )
 
     def verification_ref(item_id: str) -> dict[str, Any] | None:
         row = verification_by_id.get(item_id)
@@ -136,6 +158,8 @@ def main() -> int:
                 "destination_id": item.get("destination_id"),
                 "history": [],
             }
+        if old and isinstance(old.get("verification_ref"), dict):
+            row["verification_ref"] = old["verification_ref"]
         reference = verification_ref(item_id)
         if reference is not None:
             row["verification_ref"] = reference
@@ -148,6 +172,10 @@ def main() -> int:
         "baseline_revision_id": registry.get("baseline_revision_id"),
         "decisions": rows,
     }
+    validate_decisions(result, registry)
+    protected = [args.prior_decisions, args.registry, args.prior_registry, args.verification]
+    if any(path and path.resolve() == args.output.resolve() for path in protected):
+        raise SystemExit("FAIL: output must not overwrite a migration input")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"PASS: migrated {len(prior_by_id)} prior records into {len(rows)} registry decisions")

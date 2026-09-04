@@ -100,3 +100,25 @@ bundle, and regression suite are field-run. Fixture findings are marked
 ## License
 
 MIT © 2026 Zach Satterly
+
+### Separate installation
+
+A standalone `scruffys-mop` installation still consumes the canonical Scruffy
+validator. Set `SCRUFFY_ROOT` to the installed Scruffy root containing `SKILL.md`,
+`schema/audit-contract.json`, `scripts/validate_audit.py`, and
+`scripts/verify_fixes.py`. The path is validated and an absent installation
+produces an actionable refusal. The integrated checkout discovers its parent
+by default. Mop uses its own packaged brand image, so its dashboard does not
+require a sibling assets folder.
+
+Dashboard evidence embedding accepts signature-checked PNG, JPEG, GIF, and WebP
+files up to 25 MiB each. Copy explicitly supplied reference images into the
+bundle (or the operator-selected assets manifest directory) before embedding.
+Relative paths and symlinks cannot escape that directory. Imported reference
+source strings do not authorize reading unrelated local files. Keep provenance
+links and original source attribution alongside copied images. SVG is not an
+embedded evidence format. Unfinished direction scaffolds are visible but their
+selection controls are disabled.
+
+Repair proof is documented in `references/verification.md`: implementation
+self-assessments and canonical verification receipts are different artifacts.

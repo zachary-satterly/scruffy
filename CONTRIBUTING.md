@@ -31,7 +31,7 @@ Most contributions belong in the first lane. Set `origin: "user"`, fill
 
 ### Corpus contributions
 
-Use `scripts/intake.py` to collect caption working material. `transcripts/` and `frames/` are intentionally ignored and must not be committed.
+Use `scripts/intake.py --no-frames <video-url>` to collect caption working material. Full-channel ingestion requires an explicit `--channel <channel-url>`; help or missing inputs never start downloads. `transcripts/` and `frames/` are intentionally ignored and must not be committed.
 
 For a durable principle:
 

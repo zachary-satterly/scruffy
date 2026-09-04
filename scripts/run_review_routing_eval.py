@@ -8,6 +8,9 @@ import copy
 import hashlib
 import json
 import secrets
+import re
+import tempfile
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -224,13 +227,13 @@ Output JSON only. Do not wrap it in Markdown.
 """
 
 
-def prepare(args: argparse.Namespace) -> int:
+def _prepare(args: argparse.Namespace, output: Path) -> int:
     if args.repetitions < 1:
         raise ValueError("repetitions must be at least 1")
     if not args.run_id.strip() or not args.agent.strip():
         raise ValueError("run-id and agent must be non-empty")
-    output = args.output.resolve()
-    if output == LOCAL_HOLDOUT_DIR.resolve() or LOCAL_HOLDOUT_DIR.resolve() in output.parents:
+    destination = args.output.resolve()
+    if destination == LOCAL_HOLDOUT_DIR.resolve() or LOCAL_HOLDOUT_DIR.resolve() in destination.parents:
         raise ValueError("run output cannot be placed under the private holdout directory")
     scoring_key = validate_key_scope(args.scoring_key, args.evidence_class)
     identity = model_identity(args)
@@ -285,10 +288,10 @@ def prepare(args: argparse.Namespace) -> int:
         trials.append({
             "trial_id": trial_id,
             "trial_nonce": trial_nonce,
-            "prompt": str(prompt_path.resolve()),
+            "prompt": str(destination / "prompts" / prompt_path.name),
             "prompt_sha256": digest(prompt_path),
-            "expected_result": str(result_path.resolve()),
-            "expected_session_receipt": str(receipt_path.resolve()),
+            "expected_result": str(destination / "results" / result_path.name),
+            "expected_session_receipt": str(destination / "receipts" / receipt_path.name),
         })
 
     artifact_hashes = {
@@ -338,10 +341,29 @@ def prepare(args: argparse.Namespace) -> int:
     manifest["manifest_sha256"] = object_digest(manifest)
     manifest_path = output / "run-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    print(f"Prepared {args.repetitions} frozen, key-free trials at {output}")
-    print(f"Evidence class: {args.evidence_class}")
-    print(f"Manifest: {manifest_path}")
     return 0
+
+
+def prepare(args: argparse.Namespace) -> int:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", args.run_id):
+        raise ValueError("run-id must be 1-128 filename-safe letters, digits, dots, underscores or hyphens, starting with a letter or digit")
+    destination = args.output.resolve()
+    if destination.exists():
+        raise ValueError("run output already exists; choose a new directory to preserve frozen evidence")
+    if not destination.parent.is_dir():
+        raise ValueError("run output parent directory must already exist")
+    with tempfile.TemporaryDirectory(prefix=".scruffy-routing-", dir=destination.parent) as raw:
+        staged = Path(raw) / "run"
+        staged.mkdir()
+        result = _prepare(args, staged)
+        # Reserve the destination so an existing run cannot be replaced.
+        destination.mkdir()
+        for child in staged.iterdir():
+            os.rename(child, destination / child.name)
+    print(f"Prepared {args.repetitions} frozen, key-free trials at {destination}")
+    print(f"Evidence class: {args.evidence_class}")
+    print(f"Manifest: {destination / 'run-manifest.json'}")
+    return result
 
 
 def status(args: argparse.Namespace) -> int:

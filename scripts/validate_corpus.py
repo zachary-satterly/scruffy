@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -51,10 +52,18 @@ def transcript_index() -> dict[str, tuple[Path, str, int]]:
         return index
     for path in TRANSCRIPTS.glob("*.md"):
         text = path.read_text(encoding="utf-8")
-        video = re.search(r"^video_id:\s*([A-Za-z0-9_-]{11})$", text, re.M)
+        video = re.search(r"^video_id:[ \t]*([^\n]+)$", text, re.M)
+        identifier = video.group(1).strip() if video else ""
+        if identifier.startswith('"'):
+            try:
+                identifier = json.loads(identifier)
+            except (ValueError, TypeError):
+                continue
+        if not isinstance(identifier, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", identifier):
+            continue
         duration = re.search(r'^duration:\s*"(\d+:\d{2})"$', text, re.M)
         if video and duration:
-            index[video.group(1)] = (path, text, seconds(duration.group(1)))
+            index[identifier] = (path, text, seconds(duration.group(1)))
     return index
 
 

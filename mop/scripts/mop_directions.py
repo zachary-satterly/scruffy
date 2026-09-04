@@ -210,6 +210,8 @@ def _anchor_path_allowed(image: str, directions: dict, plan_bundle_dir: Path | N
     inside the bundle itself (mockups, captured evidence), or matches one of this
     audit's screenshot receipt locators. Anything else is cross-product leakage."""
     path = Path(image)
+    if not path.is_absolute() and plan_bundle_dir is not None:
+        path = plan_bundle_dir / path
     declared = [Path(src) for src in directions.get("reference_sources", [])]
     if plan_bundle_dir is not None:
         declared.append(plan_bundle_dir)
@@ -230,11 +232,31 @@ def _anchor_path_allowed(image: str, directions: dict, plan_bundle_dir: Path | N
     return False
 
 
+def is_placeholder(value: object) -> bool:
+    """Recognize scaffold syntax, not product names or quoted task content."""
+    if not isinstance(value, str) or not value.strip():
+        return True
+    text = value.strip()
+    return (text == "TODO" or text.startswith("TODO:")
+            or text.startswith("TODO-distinct-paradigm-")
+            or text == "TODO material system"
+            or (text.startswith("TODO direction ") and len(text.removeprefix("TODO direction ")) == 1))
+
+
+def direction_is_draft(direction: dict) -> bool:
+    fields = ("title", "paradigm", "material", "thesis", "risk")
+    refs = direction.get("principle_refs")
+    return (any(is_placeholder(direction.get(field)) for field in fields)
+            or not isinstance(refs, list) or not refs
+            or any(is_placeholder(ref) for ref in refs))
+
+
 def check_directions(
     directions: dict,
     plan: dict,
     bundle: dict | None = None,
     bundle_dir: str | Path | None = None,
+    *, allow_unselected_drafts: bool = False,
 ) -> list[str]:
     """Validate a directions document against the plan. Raises InteropError."""
     notes: list[str] = []
@@ -267,7 +289,11 @@ def check_directions(
             raise InteropError(f"{gid}: direction IDs repeat")
         for d in dirs:
             refs = d.get("principle_refs") or []
-            if not refs or any(str(r).startswith("TODO") for r in refs):
+            if group.get("selected") is not None and direction_is_draft(d):
+                raise InteropError(f"{gid}: selected groups must complete draft directions before implementation")
+            if (not refs or any(is_placeholder(r) for r in refs)) and allow_unselected_drafts and group.get("selected") is None:
+                notes.append(f"{gid}/{d.get('id')}: draft; supply principle references before selecting")
+            elif not refs or any(is_placeholder(r) for r in refs):
                 raise InteropError(
                     f"{gid}/{d.get('id')}: every direction must cite the principle(s) it serves "
                     "(principle_refs into Scruffy's corpus, e.g. [KJ §n], [RUI], PRINCIPLES §n)"

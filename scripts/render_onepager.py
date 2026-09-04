@@ -8,28 +8,15 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import re
 import sys
 from pathlib import Path
 
-from report_contract import referral_rows, score_row_label
+from report_contract import referral_rows, score_row_label, score_order
 from validate_audit import load_json, validate_registry, validate_context
 
 
 def esc(value: object) -> str:
     return (str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
-
-
-def score_order(row: dict) -> tuple[int, int]:
-    value = row.get("score")
-    if type(value) is int and 0 <= value <= 3:
-        return 0, -value
-    # Schema 2.0 reports used display strings rather than numeric scores.
-    if isinstance(value, str):
-        match = re.match(r"^([0-3])(?:\s*[·—-]|\s*$)", value)
-        if match:
-            return 0, -int(match.group(1))
-    return 1, 0
 
 
 def main(argv: list[str] | None = None) -> int:

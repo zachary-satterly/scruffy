@@ -124,8 +124,8 @@ def build_preflight(attestations: dict | None = None, browser: dict | None = Non
 
 
 def to_handoff_augmentations(preflight: dict) -> dict:
-    """Map a preflight report to mop_handoff's used/absent/not_reported vocabulary."""
-    mapping = {"available": "used", "absent": "absent", "not_run": "not_reported"}
+    """Disclose probes without inferring use from capability availability."""
+    mapping = {"available": "not_reported", "absent": "absent", "not_run": "not_reported"}
     out = {}
     for cap, rec in preflight["augmentations"].items():
         out[cap] = mapping.get(rec.get("status"), "not_reported")

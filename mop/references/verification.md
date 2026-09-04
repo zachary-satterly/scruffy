@@ -48,7 +48,7 @@ Then generate the handoff:
 python3 scripts/mop_handoff.py <bundle-dir> --work work.json --authorized
 ```
 
-The output records every item as `implemented-pending-reaudit` with
+The output records each supplied implementation as `implemented-pending-reaudit` with
 `cleared_by: pending Scruffy re-audit`. It lists any approved-but-unimplemented
 items. It contains no `fixed`/`cleared` status — by construction, `mop_handoff.py`
 cannot emit one.
@@ -67,3 +67,31 @@ Give the user:
 If you cannot verify a check in this environment (no browser, no trace), say so
 plainly and mark it `partial` with the reason. Never turn an unrun check into a
 pass.
+
+## Canonical executable receipt
+
+Before the handoff, follow Scruffy's `references/fix-loop.md`. Author any missing
+fix packet, review its executable checks and working directory, and run the
+canonical verifier from the installed Scruffy root:
+
+```sh
+python3 "$SCRUFFY_ROOT/scripts/verify_fixes.py" findings.json --decisions decisions.json --execute --cwd /path/to/target --output verification.json
+```
+
+Run that command in the bundle directory. Set `SCRUFFY_ROOT` to the canonical
+Scruffy installation (the repository parent when working in the integrated
+checkout). Browser results use the canonical verifier's `--results` option;
+manual checks stay manual. This receipt is separate from `work.json`, which is
+an implementation self-assessment, not execution proof.
+
+`mop_handoff.py` automatically consumes a bundle's `verification.json`, or accepts
+`--verification <path>`. It delegates receipt integrity and run binding to
+Scruffy's canonical validator, without executing any checks. Missing default
+receipts remain `not_run`; failed and manual receipts retain those states.
+An explicitly requested missing receipt refuses. The handoff never clears a
+finding even when its receipt is verified; only the next audit does that.
+Absent work entries appear only in `unimplemented`, never as implemented rows.
+Each supplied work entry must name changed surfaces. Missing self-check results
+remain not assessed. Capability availability is not proof of use: preflight
+maps available tools to `not_reported` in handoff usage; record `used` explicitly
+only after actually using the capability.

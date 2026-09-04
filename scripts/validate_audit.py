@@ -663,18 +663,80 @@ def validate_baseline(current: dict[str, Any], baseline: dict[str, Any]) -> None
             fail(f"new item {item_id} must have disposition new")
 
 
+def validate_verification_receipt(
+    verification: dict[str, Any], registry: dict[str, Any],
+    decisions: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Bind a receipt to its packet; preserve failure, pending and manual states.
+
+    This validates integrity, not authenticity or successful remediation. A
+    separately authored receipt is still supplied evidence requiring re-audit.
+    """
+    if not isinstance(verification, dict) or verification.get("schema_version") != "1.0":
+        fail("verification.schema_version must be 1.0")
+    for field in ("audit_id", "revision_id"):
+        if verification.get(field) != registry.get(field):
+            fail(f"verification.{field} must match the registry")
+    if type(verification.get("executed_commands")) is not bool:
+        fail("verification.executed_commands must be a boolean")
+    items = {item["id"]: item for item in registry.get("items", [])}
+    choices = None
+    if decisions is not None:
+        validate_decisions(decisions, registry)
+        choices = {row["item_id"]: row["decision"] for row in decisions["decisions"]}
+    rows = verification.get("items")
+    if not isinstance(rows, list):
+        fail("verification.items must be an array")
+    proven = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            fail("verification.items entries must be objects")
+        item_id = require_text(row.get("id"), "verification item id")
+        if item_id in proven:
+            fail(f"duplicate verification entry for {item_id}")
+        if item_id not in items or not isinstance(items[item_id].get("fix_packet"), dict):
+            fail(f"verification item {item_id} has no registry fix_packet")
+        decision = row.get("decision")
+        if decision not in {"approve", "pending"}:
+            fail(f"{item_id} verification decision must be approve or pending")
+        if choices is not None and choices.get(item_id) != decision:
+            fail(f"{item_id} verification decision does not match decisions")
+        expected = items[item_id]["fix_packet"]["acceptance"]
+        checks = row.get("checks")
+        if not isinstance(checks, list) or len(checks) != len(expected):
+            fail(f"{item_id} verification must cover every acceptance check")
+        outcomes = set()
+        for index, (check, promised) in enumerate(zip(checks, expected)):
+            if not isinstance(check, dict) or type(check.get("index")) is not int or check["index"] != index:
+                fail(f"{item_id} verification check {index} has an invalid index or shape")
+            if check.get("kind") != promised["kind"]:
+                fail(f"{item_id} verification check {index} changed the promised check kind")
+            result = check.get("result")
+            allowed = {"manual"} if promised["kind"] == "manual" else {"pass", "fail", "not_run"}
+            if not isinstance(result, str) or result not in allowed:
+                fail(f"{item_id} verification check {index} has an invalid result")
+            if promised["kind"] == "command" and result != "not_run":
+                if not verification["executed_commands"] or decision != "approve":
+                    fail(f"{item_id} command result requires approved execution")
+            outcomes.add(result)
+        overall = ("failed" if "fail" in outcomes else "not_run" if not outcomes or "not_run" in outcomes
+                   else "manual" if "manual" in outcomes else "verified")
+        if row.get("result") != overall:
+            fail(f"{item_id} verification result disagrees with its checks")
+        proven[item_id] = row
+    return proven
+
+
 def validate_fix_verification(
     current: dict[str, Any],
     baseline: dict[str, Any],
     verification: dict[str, Any] | None,
 ) -> None:
-    """A fix that had an executable check must be proven, not judged.
+    """Require every promised packet check before accepting a fixed transition.
 
-    `references/durability.md` makes `fixed` a reconciliation judgment, which is
-    right for items nobody could automate. It is too weak for an item that
-    shipped a fix_packet: the auditor already wrote the executable proof, so
-    calling it fixed without running it discards evidence that exists. This rule
-    reaches only those items; everything else keeps judgment-based behaviour.
+    Executable checks must pass; manual checks remain explicit re-audit
+    judgments, including packets where automation cannot prove the outcome.
+    A manual receipt alone never certifies that a person performed the review.
     """
     prior_packets = {
         item["id"]: item["fix_packet"]
@@ -694,22 +756,7 @@ def validate_fix_verification(
             "items marked fixed carried a baseline fix_packet but no --verification was supplied: "
             + ", ".join(sorted(item["id"] for item in owed))
         )
-    if verification.get("schema_version") != "1.0":
-        fail("verification.schema_version must be 1.0")
-    for field in ("audit_id", "revision_id"):
-        if verification.get(field) != baseline.get(field):
-            fail(f"verification.{field} must match the baseline registry")
-    rows = verification.get("items")
-    if not isinstance(rows, list):
-        fail("verification.items must be an array")
-    proven: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        if not isinstance(row, dict):
-            fail("verification.items entries must be objects")
-        item_id = require_text(row.get("id"), "verification item id")
-        if item_id in proven:
-            fail(f"duplicate verification entry for {item_id}")
-        proven[item_id] = row
+    proven = validate_verification_receipt(verification, baseline)
     for item in owed:
         item_id = item["id"]
         row = proven.get(item_id)
@@ -861,6 +908,12 @@ def validate_context(
         explicit_uri = re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", locator)
         if explicit_uri and parsed.scheme not in {"http", "https"}:
             fail(f"{label}.locator uses an unsupported URI scheme")
+        if kind == "screenshot" and not explicit_uri:
+            from evidence_assets import confined_path
+            try:
+                confined_path(locator.split("#", 1)[0], base_path)
+            except (OSError, ValueError) as error:
+                fail(f"{label}.locator: {error}")
         if kind in {"screenshot", "source", "runtime_trace", "copy_sample", "analysis_receipt"} and not explicit_uri and verification == "captured":
             candidate_text = re.sub(r":\d+$", "", locator.split("#", 1)[0])
             candidate = Path(candidate_text)

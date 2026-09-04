@@ -78,7 +78,6 @@ def check_text(path: str, text: str, leads: list[dict]) -> None:
         return
     for sentence in sentences(text):
         words = len(WORD.findall(sentence))
-        enumerated = len(LIST_MARKER.findall(sentence)) >= 2 or sentence.count(",") >= 4 and ";" not in sentence and words > 35 and False
         if words > 35 and "overlong_sentence" in SIGNALS and not (len(LIST_MARKER.findall(sentence)) >= 2):
             leads.append({"code": "overlong_sentence", "path": path, "measure": f"{words} words", "snippet": sentence[:110]})
         if (sentence.count(";") >= 2 or sentence.count(",") >= 5) and "clause_pileup" in SIGNALS:

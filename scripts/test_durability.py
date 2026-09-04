@@ -95,7 +95,7 @@ def main() -> int:
             "--verification",
             str(failing),
             succeeds=False,
-            contains="verification checks did not all pass",
+            contains="verification result disagrees with its checks",
         )
     # --verification without a baseline has nothing to hold the fix against.
     run(

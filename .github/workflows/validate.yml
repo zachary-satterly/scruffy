@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - name: Require JavaScript runtime for dashboard regressions
+        run: node --version
       - name: Run complete validation and regression suite
         # Consumer checkout: source-ledger validation reports missing private
         # transcripts as SKIP; committed ledger checks still run.

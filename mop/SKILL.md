@@ -115,3 +115,14 @@ disclose the gap rather than editing the bundle to make it pass.
 If a step would have you produce a finding, choose an approval, invent a severity
 or evidence, mark your own work cleared, or widen scope past the approved items —
 stop and return to Scruffy’s audit stage.
+
+## Installation and proof
+
+For a standalone repair installation, set `SCRUFFY_ROOT` to the canonical Scruffy
+root; the integrated checkout uses its parent automatically. Missing or invalid
+canonical installations refuse with setup instructions. Keep verification in
+Scruffy: generate `verification.json` using its `verify_fixes.py`, then let
+`mop_handoff.py` consume that receipt. See `references/verification.md` for the
+exact sequence. A missing receipt remains not run, and manual or failed checks
+never become verified through a self-assessment. Preflight reports availability;
+only actual tool use permits a `used` handoff claim.

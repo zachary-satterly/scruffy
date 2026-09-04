@@ -64,6 +64,29 @@ def main() -> int:
             },
         )
         run(key, good, 0)
+        original = json.loads(good.read_text(encoding="utf-8"))
+        for signals in ([], ["one"], ["same", "same"], [{}, {}], [[], []], ["", "two"], [None, "two"]):
+            malformed = json.loads(json.dumps(original))
+            malformed["candidates"][0]["signals"] = signals
+            write(bad, malformed)
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--key", str(key), "--discovery", str(good), "--discovery", str(bad)],
+                capture_output=True, text=True,
+            )
+            assert result.returncode == 1, result.stderr
+            report = json.loads(result.stdout)
+            assert report["results"][0]["passed"] and not report["results"][1]["passed"]
+            assert report["results"][1]["integrity_problems"]
+            assert "Traceback" not in result.stderr
+        for document in ([], None):
+            bad.write_text(json.dumps(document))
+            run(key, bad, 1)
+        bad.write_text("{broken")
+        run(key, bad, 1)
+        for expectation in (None, [], {"expected_disposition": []}):
+            malformed_key = root / "invalid-key.json"
+            write(malformed_key, {"sample_expectations": {"A-01": expectation}})
+            run(malformed_key, good, 2)
         contaminated = json.loads(good.read_text(encoding="utf-8"))
         contaminated["authorship_assessment"] = "probably_ai"
         contaminated["candidates"][0]["candidate_id"] = "COPY-001"

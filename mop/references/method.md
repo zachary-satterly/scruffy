@@ -102,3 +102,23 @@ handoff and the changed surfaces; recommend the re-audit.
 Scruffy audits, decides, implements, and re-audits. If a repair step would
 have you produce a finding, choose an approval, invent a severity, or mark your
 own work cleared, you have crossed the line — stop and hand back instead.
+
+## Installation and proof routing
+
+A separate repair installation needs `SCRUFFY_ROOT` pointing to the canonical
+Scruffy installation. The integrated layout defaults to its parent. This is a
+validated dependency, not a copied schema. Before the final handoff, generate
+and retain canonical `verification.json` as described in `verification.md`.
+Unrun checks remain unrun; available tools are not automatically reported used.
+
+Explicit work orders provide priority among ready steps. Dependencies always
+precede their dependents, including when an approved item was omitted from the
+explicit orders. Real dependency cycles refuse; a dependency already scheduled
+is satisfied for ordering. Nonapproved prerequisites remain warnings requiring
+resolution before that dependent repair, without erasing independent work.
+
+Re-running `mop_run.py` preserves an existing unselected direction draft byte for
+byte and renders it again, reporting missing principle references. Draft controls
+remain disabled. Preparation is not implementation approval: selecting a draft
+still refuses, and `mop_directions.py check` remains strict. Complete every draft
+in a selected group before submitting that group for implementation.

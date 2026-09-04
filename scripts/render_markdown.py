@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from report_contract import (
-    CAPABILITY_LABELS,
-    CAPABILITY_STATUS_LABELS,
+    capability_rows,
+    score_rows,
     PRODUCT_BASIS_LABELS,
     QUESTION_LABELS,
     TASK_STATUS_LABELS,
@@ -24,7 +24,6 @@ from report_contract import (
     public_evidence_summary,
     referral_rows,
     routing_rows,
-    score_display,
     severity_label,
     status_label,
 )
@@ -221,14 +220,7 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
         ]
         for index, row in enumerate(context.get("tasks", []), start=1)
     ]
-    capability_table_rows = [
-        [
-            CAPABILITY_LABELS.get(row.get("key"), str(row.get("key", "")).replace("_", " ").title()),
-            CAPABILITY_STATUS_LABELS.get(row.get("status"), status_label(row.get("status", ""))),
-            humanize_text(row.get("scope", ""), item_labels=item_labels, evidence_assets=evidence_assets),
-        ]
-        for row in context.get("capabilities", [])
-    ]
+    capability_table_rows = capability_rows(context, item_labels=item_labels, evidence_assets=evidence_assets)
     route_table_rows = [
         [humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in row]
         for row in routing_rows(context)
@@ -241,17 +233,7 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
         [humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in row]
         for row in referral_rows(context)
     ]
-    score_table_rows = [
-        [
-            plain_category_label(row.get("category", "")),
-            score_display(row.get("score", "")),
-            humanize_text(row.get("evidence", ""), item_labels=item_labels, evidence_assets=evidence_assets),
-        ]
-        for row in sorted(
-            context.get("scores", []),
-            key=lambda score: (0, -score.get("score")) if isinstance(score.get("score"), int) else (1, 0),
-        )
-    ]
+    score_table_rows = score_rows(context, item_labels=item_labels, evidence_assets=evidence_assets)
     reconciliation_rows = [
         [
             item_labels.get(item["id"], "Review item"),

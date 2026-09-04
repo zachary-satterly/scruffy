@@ -4,6 +4,18 @@ For durable or repeated audits, [references/durability.md](durability.md) is bin
 
 ## Required artifact set
 
+Artifact creation is separate from permission to edit the audited repository.
+`source_write` describes target-code access; it does not authorize or prohibit
+writing an audit bundle to an agreed output directory.
+
+| Available output capability | Deliverable |
+| --- | --- |
+| Writable artifact directory | Complete JSON registry/context/decisions, brief and Markdown report |
+| Writable artifacts and interactive file viewer | Also render the HTML dashboard |
+| Writable artifacts without viewer | HTML optional; JSON and Markdown remain complete |
+| No artifact writes | Brief, complete Markdown report and registry JSON in the response; disclose this fallback |
+
+A quick static scan emits leads and an operated checklist, not a completed audit.
 For a substantial file-backed audit, produce:
 
 0. `brief.md` — the rendered decision brief (`scripts/render_brief.py`): verdict, at most three items to decide, cleared suspicions, checks not run, 150-word body. Always returned first; never written freehand.
@@ -435,14 +447,16 @@ it records a `fixed` disposition.
 `validate_audit.py <current> --baseline <prior> --verification verification.json`
 enforces that citation. Any item whose baseline record was open or
 needs-verification, carried a `fix_packet`, and is now `fixed` needs a
-`verification.json` entry whose non-manual checks all pass — or a typed
-`specialist_review` receipt, or an explicit `verification_override` string on
-the item saying why no executable proof exists. The override renders in the
-dashboard and the Markdown report; a fix excused from proof says so in public.
+`verification.json` entry bound to that baseline, with every promised check in
+order and every non-manual check passing. Manual checks remain explicitly manual;
+the auditor must perform the corresponding judgment before closing the item.
+A specialist receipt can inform that judgment but cannot replace a promised
+executable check. Free-text overrides and evidence-ID prefixes cannot bypass proof.
 Items whose baseline record had no packet keep the judgment-based behaviour in
 [durability.md](durability.md).
 
-`scripts/migrate_decisions.py prior-decisions.json findings.json out.json --verification verification.json`
+`scripts/migrate_decisions.py prior-decisions.json findings.json out.json --prior-registry prior-findings.json --verification verification.json`
+Cross-revision migration requires the prior registry to check immutable identities; same-revision proof attachment does not.
 attaches a `verification_ref` to each migrated decision, so the decision history
 records what proved the fix and not merely that someone approved it.
 
@@ -473,4 +487,4 @@ Active performance findings require runtime evidence; accessibility findings req
 
 ## Starting a new bundle
 
-Run `python3 scripts/scaffold_audit.py --audit-id <id> --target <desc> --title <title> --out <dir>` to emit a pre-valid findings/context/decisions trio (TODO placeholders, one `needs-verification` seed item). Select an explicit contract-safe run receipt with `--mode` and `--repository-write-authority`; authorized writes are accepted only for `redesign` and `design`, while an unauthorized write-capable mode safely downgrades its effective mode to `audit`. Repeat `--supplied-screenshot <path>` to copy recognized PNG, JPEG, GIF, or WebP evidence into the bundle and seed typed, renderer-compatible screenshot receipts. Explicit `--item-prefix` values must be two to six uppercase alphanumeric characters beginning with a letter, and invalid inputs fail before the output directory is created. Edit from green instead of negotiating with the validator.
+Run `python3 scripts/scaffold_audit.py --audit-id <id> --target <desc> --title <title> --out <dir>` to emit a structurally valid draft findings/context/decisions trio (TODO placeholders, one `needs-verification` seed item). Select an explicit contract-safe run receipt with `--mode` and `--repository-write-authority`; authorized writes are accepted only for `redesign` and `design`, while an unauthorized write-capable mode safely downgrades its effective mode to `audit`. Repeat `--supplied-screenshot <path>` to copy recognized PNG, JPEG, GIF, or WebP evidence into the bundle and seed typed, renderer-compatible screenshot receipts. Explicit `--item-prefix` values must be two to six uppercase alphanumeric characters beginning with a letter, and invalid inputs fail before the output directory is created. The output directory must be new; validation occurs before publication. Defaults say not run, not verified, and N/A: structural validity is not evidence that an audit happened. Replace every TODO before presenting an audit.

@@ -11,6 +11,8 @@ import json
 import sys
 import tempfile
 import urllib.request
+from contextlib import contextmanager
+from collections.abc import Iterator
 from pathlib import Path
 
 from rule_engine import DEFAULT_RULES_DIR, evaluate_page, load_packs, validate_packs
@@ -18,19 +20,28 @@ from rule_engine import DEFAULT_RULES_DIR, evaluate_page, load_packs, validate_p
 SEVERITY_ORDER = {"error": 0, "warning": 1, "suggestion": 2}
 
 
-def acquire(target: str) -> tuple[Path, str]:
+MAX_HTML_BYTES = 10 * 1024 * 1024
+
+
+@contextmanager
+def acquire(target: str) -> Iterator[tuple[Path, str]]:
     if target.startswith(("http://", "https://")):
         request = urllib.request.Request(target, headers={"User-Agent": "scruffy-scan"})
         with urllib.request.urlopen(request, timeout=20) as response:
-            body = response.read().decode("utf-8", errors="replace")
-        handle = tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8")
-        handle.write(body)
-        handle.close()
-        return Path(handle.name), target
-    path = Path(target)
-    if not path.is_file():
-        raise SystemExit(f"FAIL: {target} is neither a URL nor a file")
-    return path, str(path)
+            raw = response.read(MAX_HTML_BYTES + 1)
+        if len(raw) > MAX_HTML_BYTES:
+            raise ValueError(f"HTML exceeds {MAX_HTML_BYTES} bytes")
+        with tempfile.TemporaryDirectory(prefix="scruffy-scan-") as directory:
+            path = Path(directory) / "page.html"
+            path.write_text(raw.decode("utf-8", errors="replace"), encoding="utf-8")
+            yield path, target
+    else:
+        path = Path(target)
+        if not path.is_file():
+            raise ValueError(f"{target} is neither a URL nor a file")
+        if path.stat().st_size > MAX_HTML_BYTES:
+            raise ValueError(f"HTML exceeds {MAX_HTML_BYTES} bytes")
+        yield path, str(path)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -43,8 +54,13 @@ def main(argv: list[str] | None = None) -> int:
 
     packs = load_packs(args.rules_dir, args.pack)
     validate_packs(packs)
-    page, origin = acquire(args.target)
-    leads = evaluate_page(page, packs)
+    if args.output and not args.target.startswith(("http://", "https://")) and args.output.resolve() == Path(args.target).resolve():
+        parser.error("--output must not overwrite the scanned file")
+    try:
+        with acquire(args.target) as (page, origin):
+            leads = evaluate_page(page, packs)
+    except (OSError, ValueError) as error:
+        parser.exit(1, f"FAIL: could not scan target: {error}\n")
     checklist = [
         {"rule_id": r["id"], "category": r["category"], "instruction": r["predicate"]["instruction"],
          "citation": r["citation"]}

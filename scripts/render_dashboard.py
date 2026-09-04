@@ -4,12 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import html
 import json
-import mimetypes
 from pathlib import Path
 from typing import Any
+
+from evidence_assets import embed_raster
 
 from report_contract import (
     evidence_by_id,
@@ -19,12 +19,13 @@ from report_contract import (
     item_label_map,
     plain_category_label,
     public_evidence_summary,
-    score_display,
     severity_label,
     status_label,
     disposition_label,
-    CAPABILITY_LABELS,
     CAPABILITY_STATUS_LABELS,
+    capability_rows,
+    score_rows,
+    score_number,
     PRODUCT_BASIS_LABELS,
     QUESTION_LABELS,
     TASK_STATUS_LABELS,
@@ -46,14 +47,7 @@ def esc(value: Any) -> str:
 
 
 def embed_asset(src: str, base: Path) -> str:
-    path = Path(src)
-    if not path.is_absolute():
-        path = base / path
-    if not path.is_file():
-        return ""
-    mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-    return f"data:{mime};base64,{encoded}"
+    return embed_raster(src, base)
 
 
 def visual_evidence_map(context: dict[str, Any]) -> dict[tuple[str, str | None], dict[str, Any]]:
@@ -426,14 +420,7 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
         ]
         for index, row in enumerate(context.get("tasks", []), start=1)
     ]
-    capability_table_rows = [
-        [
-            CAPABILITY_LABELS.get(row.get("key"), str(row.get("key", "")).replace("_", " ").title()),
-            CAPABILITY_STATUS_LABELS.get(row.get("status"), status_label(row.get("status", ""))),
-            humanize_text(row.get("scope", ""), item_labels=item_labels, evidence_assets=evidence_assets),
-        ]
-        for row in context.get("capabilities", [])
-    ]
+    capability_table_rows = capability_rows(context, item_labels=item_labels, evidence_assets=evidence_assets)
     route_table_rows = [
         [humanize_text(value, item_labels=item_labels, evidence_assets=evidence_assets) for value in row]
         for row in routing_rows(context)
@@ -458,18 +445,7 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
         table_html(["Review area", "Question", "Status", "Why it was referred", "Claim boundary", "Supporting records", "Verified specialist result"], referral_table_rows)
         if referral_table_rows else '<p class="quiet">No specialist referrals recorded.</p>'
     )
-    score_source = sorted(
-        context.get("scores", []),
-        key=lambda row: (0, -row.get("score")) if isinstance(row.get("score"), int) else (1, 0),
-    )
-    score_table_rows = [
-        [
-            plain_category_label(row.get("category", "")),
-            score_display(row.get("score", "")),
-            humanize_text(row.get("evidence", ""), item_labels=item_labels, evidence_assets=evidence_assets),
-        ]
-        for row in score_source
-    ]
+    score_table_rows = score_rows(context, item_labels=item_labels, evidence_assets=evidence_assets)
     reconciliation_rows = [
         [
             item_labels.get(item["id"], "Review item"),
@@ -521,8 +497,8 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
     strength_count = sum(1 for i in items if i["kind"] == "strength")
     cleared_count = sum(1 for i in items if i["status"] in {"cleared", "fixed"})
     carried_count = sum(1 for i in items if i.get("revision_disposition") == "carried")
-    numeric_scores = [(row.get("category"), row.get("score")) for row in context.get("scores", [])
-                      if isinstance(row.get("score"), int)]
+    numeric_scores = [(row.get("category"), score_number(row.get("score"))) for row in context.get("scores", [])
+                      if score_number(row.get("score")) is not None]
     worst = max(numeric_scores, key=lambda pair: pair[1], default=None)
     worst_label = f"{plain_category_label(worst[0])} · {worst[1]} of 3" if worst else "—"
     hero = next((i for i in prioritized_findings if i["status"] in {"open", "needs-verification"}), None)
@@ -722,18 +698,42 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
     const itemRows=[...document.querySelectorAll('[data-item-id]')];
     const clone=value=>JSON.parse(JSON.stringify(value));
     const baseRows=Object.fromEntries(embeddedDecisions.decisions.map(row=>[row.item_id,clone(row)]));
-    const loadLocal=()=>{{try{{return JSON.parse(localStorage.getItem(storageKey)||'null')}}catch{{return null}}}};
-    let state=loadLocal()||clone(embeddedDecisions);
-    const ensureRows=()=>{{
-      const allowed=new Set(registry.items.filter(item=>['finding','enhancement'].includes(item.kind)).map(item=>item.id));
-      const incoming=Object.fromEntries((state.decisions||[]).filter(row=>allowed.has(row.item_id)).map(row=>[row.item_id,row]));
-      state={{...embeddedDecisions,decisions:[...allowed].map(id=>incoming[id]||baseRows[id]||{{item_id:id,decision:'pending',note:'',updated_at:null,decision_source:'current',destination_id:null,history:[]}})}};
+    const decisionItems=new Map(registry.items.filter(item=>['finding','enhancement'].includes(item.kind)).map(item=>[item.id,item]));
+    const choices=new Set(['pending','approve','defer','reject']);
+    const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+    const validRecord=row=>object(row)&&choices.has(row.decision)&&typeof row.note==='string'&&(row.updated_at===null||typeof row.updated_at==='string');
+    const validateDecisionState=incoming=>{{
+      if(!object(incoming))throw new Error('decision data must be an object');
+      for(const key of ['schema_version','audit_id','revision_id','baseline_revision_id']){{
+        if(incoming[key]!==registry[key])throw new Error(`decision ${{key}} does not match this review`);
+      }}
+      if(!Array.isArray(incoming.decisions)||incoming.decisions.length!==decisionItems.size)throw new Error('decisions must contain every review item exactly once');
+      const seen=new Set();
+      for(const row of incoming.decisions){{
+        if(!validRecord(row)||typeof row.item_id!=='string'||!decisionItems.has(row.item_id)||seen.has(row.item_id))throw new Error('decision rows must be unique known items with valid choices and notes');
+        if(!Array.isArray(row.history)||!row.history.every(validRecord))throw new Error('decision history must contain valid records');
+        const item=decisionItems.get(row.item_id);
+        if(row.destination_id!==item.destination_id)throw new Error('decision destination does not match this review');
+        if(!['open','needs-verification'].includes(item.status)){{
+          const base=baseRows[row.item_id];
+          if(row.decision!==base.decision||row.note!==base.note||row.updated_at!==base.updated_at||JSON.stringify(row.history)!==JSON.stringify(base.history))throw new Error('resolved decisions are read-only');
+        }}
+        seen.add(row.item_id);
+      }}
+      return clone(incoming);
     }};
+    const loadLocal=()=>{{
+      try{{
+        const raw=localStorage.getItem(storageKey);
+        return raw===null?null:validateDecisionState(JSON.parse(raw));
+      }}catch(error){{document.getElementById('ui-status').textContent=`Saved decisions rejected: ${{error.message}}`;return null}}
+    }};
+    let state=loadLocal()||clone(embeddedDecisions);
     const rowFor=id=>state.decisions.find(row=>row.item_id===id);
     const persist=()=>{{try{{localStorage.setItem(storageKey,JSON.stringify(state));return true}}catch{{return false}}}};
-    const hydrate=()=>{{ensureRows();document.querySelectorAll('[data-decision-for]').forEach(control=>{{const row=rowFor(control.dataset.decisionFor);control.value=row?.decision||'pending'}});document.querySelectorAll('[data-note-for]').forEach(control=>{{const row=rowFor(control.dataset.noteFor);control.value=row?.note||''}});persist()}};
-    document.querySelectorAll('[data-decision-for]').forEach(control=>control.addEventListener('change',()=>{{const row=rowFor(control.dataset.decisionFor);if(!row)return;row.history=row.history||[];row.history.push({{decision:row.decision,note:row.note,updated_at:row.updated_at}});row.decision=control.value;row.updated_at=new Date().toISOString();persist()}}));
-    document.querySelectorAll('[data-note-for]').forEach(control=>control.addEventListener('input',()=>{{const row=rowFor(control.dataset.noteFor);if(!row)return;row.note=control.value;row.updated_at=new Date().toISOString();persist()}}));
+    const hydrate=()=>{{document.querySelectorAll('[data-decision-for]').forEach(control=>{{const row=rowFor(control.dataset.decisionFor);control.value=row?.decision||'pending'}});document.querySelectorAll('[data-note-for]').forEach(control=>{{const row=rowFor(control.dataset.noteFor);control.value=row?.note||''}})}};
+    document.querySelectorAll('[data-decision-for]').forEach(control=>control.addEventListener('change',()=>{{const row=rowFor(control.dataset.decisionFor);if(!row||!['open','needs-verification'].includes(decisionItems.get(row.item_id)?.status)||!choices.has(control.value))return;row.history=row.history||[];row.history.push({{decision:row.decision,note:row.note,updated_at:row.updated_at}});row.decision=control.value;row.updated_at=new Date().toISOString();persist()}}));
+    document.querySelectorAll('[data-note-for]').forEach(control=>control.addEventListener('input',()=>{{const row=rowFor(control.dataset.noteFor);if(!row||!['open','needs-verification'].includes(decisionItems.get(row.item_id)?.status))return;row.note=control.value;row.updated_at=new Date().toISOString();persist()}}));
     const download=(name,value)=>{{const blob=new Blob([JSON.stringify(value,null,2)],{{type:'application/json'}});const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=name;link.click();URL.revokeObjectURL(link.href)}};
     document.getElementById('download-findings').addEventListener('click',()=>download(`${{registry.audit_id}}-findings.json`,registry));
     document.getElementById('download-decisions').addEventListener('click',()=>download(`${{registry.audit_id}}-decisions.json`,state));
@@ -763,7 +763,7 @@ def render(registry: dict[str, Any], context: dict[str, Any], decision_doc: dict
       try{{await navigator.clipboard.writeText(text);document.getElementById('ui-status').textContent='Handoff copied. Paste it into your AI task.'}}
       catch{{download(`${{registry.audit_id}}-decisions.json`,state);document.getElementById('ui-status').textContent='Clipboard unavailable; decisions downloaded instead. Tell your AI to implement only the approved items, run scripts/verify_fixes.py --execute, and write verification.json into the bundle.'}}
     }});
-    document.getElementById('import-decisions').addEventListener('change',async event=>{{const file=event.target.files[0];if(!file)return;try{{const incoming=JSON.parse(await file.text());if(incoming.schema_version!==registry.schema_version||incoming.audit_id!==registry.audit_id)throw new Error('this file belongs to a different review');state=incoming;hydrate();document.getElementById('ui-status').textContent='Decisions imported and matched to the correct review items.'}}catch(error){{document.getElementById('ui-status').textContent=`Import rejected: ${{error.message}}`}}event.target.value=''}});
+    document.getElementById('import-decisions').addEventListener('change',async event=>{{const file=event.target.files[0];if(!file)return;try{{const incoming=JSON.parse(await file.text());state=validateDecisionState(incoming);hydrate();persist();document.getElementById('ui-status').textContent='Decisions imported and matched to the correct review items.'}}catch(error){{document.getElementById('ui-status').textContent=`Import rejected: ${{error.message}}`}}event.target.value=''}});
     document.querySelectorAll('[data-filter]').forEach(button=>button.addEventListener('click',()=>{{const filter=button.dataset.filter;document.querySelectorAll('[data-filter]').forEach(candidate=>candidate.classList.toggle('primary',candidate===button));itemRows.forEach(row=>{{const active=['open','needs-verification'].includes(row.dataset.status);row.hidden=filter==='all'?!active:row.dataset.status!==filter}})}}));
     hydrate();
   </script>

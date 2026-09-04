@@ -33,6 +33,10 @@ def load_contract(path: Path = MANIFEST) -> dict[str, Any]:
     }
     if any(not isinstance(row, dict) or required_mode_fields - set(row) for row in modes):
         raise ValueError("each run mode must define the complete execution contract")
+    for row in modes:
+        for field in ("repository_writes_allowed", "live_demonstration_allowed"):
+            if type(row[field]) is not bool:
+                raise ValueError(f"run mode {row['key']} {field} must be a boolean")
     mode_keys = [row.get("key") for row in modes]
     if len(mode_keys) != len(set(mode_keys)) or any(not isinstance(value, str) for value in mode_keys):
         raise ValueError("run-mode keys must be unique strings")
@@ -243,7 +247,7 @@ def render_readme(data: dict[str, Any]) -> str:
 def replace_readme_block(text: str, rendered: str) -> str:
     generated = re.compile(rf"{re.escape(README_START)}.*?{re.escape(README_END)}", re.S)
     if generated.search(text):
-        return generated.sub(rendered, text)
+        return generated.sub(lambda match: rendered, text)
     existing = re.search(r"(?ms)^## Modes\n.*?(?=^## Install\n)", text)
     if not existing:
         raise ValueError("README modes section or generated markers were not found")

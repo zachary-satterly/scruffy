@@ -397,7 +397,7 @@ def test_preflight_maps_to_handoff_vocabulary():
                          "design_reference_search": {"status": "absent", "reason": "x"}},
                         browser={"status": "available", "tool": "Chrome"})
     m = to_handoff_augmentations(r)
-    assert m == {"browser": "used", "impeccable": "used",
+    assert m == {"browser": "not_reported", "impeccable": "not_reported",
                  "design_reference_search": "absent"}
 
 
@@ -589,6 +589,11 @@ def _filled(doc):
     for g in doc["groups"]:
         for d in g["directions"]:
             d["principle_refs"] = ["[KJ §3]"]
+            d["title"] = "Direction " + d["id"]
+            d["paradigm"] = "Structure " + d["id"]
+            d["material"] = "Existing system"
+            d["thesis"] = "Group related billing actions beside their current state."
+            d["risk"] = "Changed grouping needs a keyboard and responsive check."
     return doc
 
 
@@ -818,6 +823,187 @@ def test_mop_run_prepares_full_session():
         assert (td / "mop-dashboard.html").exists(), "dashboard must always be rendered"
         assert (td / "mop-preflight.json").exists(), "preflight must always be recorded"
         assert "gate:" in proc.stdout and "augmentations:" in proc.stdout
+
+
+def test_handoff_absent_work_is_not_implemented():
+    plan = build_plan(_bundle(), INTEROP)
+    h = build_handoff(plan, {})
+    assert not h["items"]
+    assert set(h["unimplemented"]) == {s["item_id"] for s in plan["steps"]}
+    item_id = plan["steps"][0]["item_id"]
+    h = build_handoff(plan, {item_id: {"surfaces": ["src/example.ts"], "self_check": []}})
+    assert [i["item_id"] for i in h["items"]] == [item_id]
+    assert h["items"][0]["verification"]["result"] == "not_run"
+    for work in ({"unknown": {}}, {item_id: {}}, []):
+        try:
+            build_handoff(plan, work)
+        except InteropError:
+            continue
+        raise AssertionError("malformed or out-of-plan work must refuse")
+
+
+def test_explicit_orders_preserve_prerequisites_and_partial_coverage():
+    from mop_bundle import _plan_from_work_orders
+    items = {"A": {"id": "A", "category": "interaction", "depends_on": ["B"]},
+             "B": {"id": "B", "category": "backend_shape", "depends_on": []}}
+    for orders in ([{"id": "one", "lane": 1, "item_ids": ["A"]}, {"id": "two", "lane": 2, "item_ids": ["B"]}],
+                   [{"id": "one", "lane": 1, "item_ids": ["B"]}]):
+        steps, warnings = _plan_from_work_orders(orders, items, set(items), INTEROP["ordering"])
+        assert [step["item_id"] for step in steps] == ["B", "A"]
+    items["B"]["depends_on"] = ["A"]
+    try:
+        _plan_from_work_orders(orders, items, set(items), INTEROP["ordering"])
+    except InteropError:
+        return
+    raise AssertionError("real cycle must refuse")
+
+
+def test_legacy_malformed_decisions_refuse_cleanly():
+    from mop_bundle import _check_cross_references
+    bundle = _bundle()
+    for decisions in (None, {}, [None], [{}], [{"item_id": []}], [{"item_id": "AS-01", "decision": "bogus"}], [{"item_id": "AS-01", "decision": []}],
+                      [{"item_id": "AS-01", "decision": "approve"}] * 2):
+        bundle["decisions"]["decisions"] = decisions
+        try:
+            _check_cross_references(bundle)
+        except InteropError:
+            continue
+        raise AssertionError(f"malformed decisions accepted: {decisions}")
+
+
+def test_standalone_installation_uses_explicit_scruffy_root():
+    import os, subprocess
+    with tempfile.TemporaryDirectory() as td:
+        standalone = Path(td) / "repair"
+        shutil.copytree(REPO, standalone, ignore=shutil.ignore_patterns("__pycache__"))
+        env = dict(os.environ)
+        env.pop("SCRUFFY_ROOT", None)
+        command = [sys.executable, str(standalone / "scripts/mop_bundle.py"), "check", str(standalone / "fixtures/sample-audit")]
+        refused = subprocess.run(command, env=env, text=True, capture_output=True)
+        assert refused.returncode != 0 and "SCRUFFY_ROOT" in refused.stderr, refused.stderr
+        env["SCRUFFY_ROOT"] = str(REPO.parent)
+        valid = subprocess.run(command, env=env, text=True, capture_output=True)
+        assert valid.returncode == 0, valid.stdout + valid.stderr
+        env["SCRUFFY_ROOT"] = td
+        invalid = subprocess.run(command, env=env, text=True, capture_output=True)
+        assert invalid.returncode != 0 and "SCRUFFY_ROOT" in invalid.stderr
+
+
+def test_draft_direction_controls_disabled():
+    import re
+    from mop_directions import scaffold_directions
+    from mop_dashboard import build_dashboard_html
+    bundle = _bundle()
+    plan = build_plan(bundle, INTEROP)
+    html = build_dashboard_html(bundle, plan, {}, FIXTURE, scaffold_directions(plan, bundle=bundle), FIXTURE)
+    radios = re.findall(r'<input type="radio"[^>]*>', html)
+    assert radios and all("disabled" in radio for radio in radios)
+
+
+def test_complete_direction_mentions_todo_and_remains_selectable():
+    import re
+    from mop_directions import scaffold_directions, check_directions, direction_is_draft
+    from mop_dashboard import build_dashboard_html
+    bundle = _bundle()
+    plan = build_plan(bundle, INTEROP)
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        _tiny_png(base / "reference.png")
+        doc = _filled(scaffold_directions(plan, bundle=bundle))
+        for group in doc["groups"]:
+            group["imagery"] = "available"
+            group["selected"] = group["directions"][0]["id"]
+            for direction in group["directions"]:
+                direction["title"] = "TODOList product " + direction["id"]
+                direction["thesis"] = "Place the TODO column beside the active work queue."
+                direction["grounding"] = [{"source": "TODO-123 reference", "image": "reference.png", "origin": "mockup"}]
+                assert not direction_is_draft(direction)
+        check_directions(doc, plan, bundle=bundle, bundle_dir=base)
+        html = build_dashboard_html(bundle, plan, {}, base, doc, base)
+        radios = re.findall(r'<input type="radio"[^>]*>', html)
+        assert radios and all("disabled" not in radio for radio in radios)
+        assert any("checked" in radio for radio in radios)
+        bad = copy.deepcopy(doc)
+        bad["groups"][0]["directions"][0]["thesis"] = "TODO: explain the product task."
+        try:
+            check_directions(bad, plan, bundle=bundle, bundle_dir=base)
+        except InteropError as error:
+            assert "draft" in str(error)
+        else:
+            raise AssertionError("a selected scaffold placeholder must still refuse")
+
+
+def test_image_evidence_rejects_spoofing_and_escape():
+    from mop_dashboard import _data_uri
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td) / "assets"
+        base.mkdir()
+        valid = base / "ok.png"
+        _tiny_png(valid)
+        assert _data_uri(valid, None, base).startswith("data:image/png;")
+        fake = base / "fake.png"
+        fake.write_text("<svg onload='alert(1)'></svg>")
+        outside = Path(td) / "outside.png"
+        _tiny_png(outside)
+        link = base / "escape.png"
+        link.symlink_to(outside)
+        for path, mime in ((fake, None), (valid, "image/svg+xml"), (link, None)):
+            try:
+                _data_uri(path, mime, base)
+            except InteropError:
+                continue
+            raise AssertionError("invalid evidence accepted")
+
+
+def test_handoff_canonical_receipt_retains_states_and_refuses_mismatch():
+    from mop_bundle import canonical_verification
+    bundle = _bundle()
+    plan = build_plan(bundle, INTEROP)
+    item_id = plan["steps"][0]["item_id"]
+    item = next(i for i in bundle["findings"]["items"] if i["id"] == item_id)
+    work = {item_id: {"surfaces": ["src/example.ts"], "self_check": []}}
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "verification.json"
+        for kind, check_result, overall in (("command", "pass", "verified"), ("command", "fail", "failed"), ("command", "not_run", "not_run"), ("manual", "manual", "manual")):
+            item["fix_packet"] = {"target": [{"kind": "file", "value": "src/example.ts"}], "change": "Restore accepted behavior", "effort": "S", "rollback": "Revert scoped patch", "acceptance": [{"kind": kind, "run": "true", "summary": "Check accepted behavior"}]}
+            receipt = {"schema_version": "1.0", "audit_id": plan["audit_id"], "revision_id": plan["revision_id"], "executed_commands": kind == "command" and check_result != "not_run", "items": [{"id": item_id, "decision": "approve", "result": overall, "checks": [{"index": 0, "kind": kind, "result": check_result}]}]}
+            _write_json(path, receipt)
+            validated = canonical_verification(path, bundle["findings"], bundle["decisions"])
+            handoff = build_handoff(plan, work, verification=validated, verification_path=str(path))
+            assert handoff["items"][0]["verification"]["result"] == overall
+            assert handoff["items"][0]["status"] == "implemented-pending-reaudit"
+        receipt["revision_id"] = "wrong"
+        _write_json(path, receipt)
+        try:
+            canonical_verification(path, bundle["findings"], bundle["decisions"])
+        except InteropError:
+            return
+        raise AssertionError("mismatched receipt must refuse")
+
+
+def test_mop_run_reopens_unselected_draft_without_rewriting():
+    import subprocess, re
+    with tempfile.TemporaryDirectory() as td:
+        bundle_dir = Path(td) / "sample-audit"
+        shutil.copytree(FIXTURE, bundle_dir)
+        command = [sys.executable, str(REPO / "scripts/mop_run.py"), str(bundle_dir), "--authorized"]
+        first = subprocess.run(command, text=True, capture_output=True)
+        assert first.returncode == 0, first.stdout + first.stderr
+        directions = bundle_dir / "directions.json"
+        original = directions.read_bytes()
+        second = subprocess.run(command, text=True, capture_output=True)
+        assert second.returncode == 0, second.stdout + second.stderr
+        assert directions.read_bytes() == original
+        assert "draft; supply principle references" in second.stdout
+        radios = re.findall(r'<input type="radio"[^>]*>', (bundle_dir / "mop-dashboard.html").read_text())
+        assert radios and all("disabled" in radio for radio in radios)
+        doc = json.loads(original)
+        doc["groups"][0]["selected"] = doc["groups"][0]["directions"][0]["id"]
+        _write_json(directions, doc)
+        selected_bytes = directions.read_bytes()
+        refused = subprocess.run(command, text=True, capture_output=True)
+        assert refused.returncode != 0 and "draft" in refused.stderr
+        assert directions.read_bytes() == selected_bytes
 
 
 def _run():

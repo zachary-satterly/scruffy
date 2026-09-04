@@ -237,7 +237,7 @@ def public_evidence_summary(
 def plain_category_label(key: str) -> str:
     # Canonical keys receive a reader-facing label. Legacy schema-2.0 contexts
     # already contain display strings, so preserve unknown values verbatim.
-    return PLAIN_CATEGORY_LABELS.get(key, str(key))
+    return PLAIN_CATEGORY_LABELS.get(TAXONOMY["legacy_category_aliases"].get(key, key), str(key))
 
 
 def facet_labels(values: Any) -> list[str]:
@@ -267,33 +267,17 @@ def score_display(value: Any) -> str:
     return labels.get(value, str(value))
 
 
-def product_rows(context: dict[str, Any]) -> list[list[Any]]:
-    return [
-        [QUESTION_LABELS.get(row.get("key"), row.get("question", "")), row.get("answer", ""), row.get("basis", "")]
-        for row in context.get("product_frame", [])
-    ]
-
-
 TASK_STATUS_LABELS = {"pass": "Pass", "fail": "Fail", "partial": "Partial",
                       "needs_verification": "Needs verification", "not_run": "Not run"}
 
 
-def task_rows(context: dict[str, Any]) -> list[list[Any]]:
+def capability_rows(context: dict[str, Any], **humanize_options: Any) -> list[list[Any]]:
     return [
         [
-            row.get("id", ""),
-            TASK_STATUS_LABELS.get(row.get("status", ""), row.get("status", "")),
-            row.get("goal", ""),
-            row.get("result", ""),
-            row.get("evidence", "") or evidence_summary(row.get("evidence_refs"), context),
+            CAPABILITY_LABELS.get(row.get("key"), row.get("capability") or str(row.get("key", "")).replace("_", " ").title()),
+            CAPABILITY_STATUS_LABELS.get(row.get("status"), status_label(row.get("status", ""))),
+            humanize_text(row.get("scope", ""), **humanize_options),
         ]
-        for row in context.get("tasks", [])
-    ]
-
-
-def capability_rows(context: dict[str, Any]) -> list[list[Any]]:
-    return [
-        [CAPABILITY_LABELS.get(row.get("key"), row.get("capability", "")), row.get("status", ""), row.get("scope", "")]
         for row in context.get("capabilities", [])
     ]
 
@@ -358,6 +342,7 @@ def score_row_label(key: Any) -> str:
     public category, then the measurement framing used for the score itself.
     When the measurement framing adds no words beyond the public label
     ("Accessibility slop · Accessibility"), show the public label alone."""
+    key = TAXONOMY["legacy_category_aliases"].get(key, key)
     public = CATEGORY_LABELS.get(key)
     scored = SCORE_LABELS.get(key)
     if public and scored:
@@ -367,10 +352,30 @@ def score_row_label(key: Any) -> str:
     return public or scored or str(key or "")
 
 
-def score_rows(context: dict[str, Any]) -> list[list[Any]]:
+def score_number(value: Any) -> int | None:
+    """Read canonical scores and the numeric prefix of legacy display strings."""
+    if type(value) is int and 0 <= value <= 3:
+        return value
+    if isinstance(value, str):
+        match = re.match(r"^([0-3])(?:\s*[·—-]|\s*$)", value)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def score_order(row: dict[str, Any]) -> tuple[int, int]:
+    number = score_number(row.get("score"))
+    return (0, -number) if number is not None else (1, 0)
+
+
+def score_rows(context: dict[str, Any], **humanize_options: Any) -> list[list[Any]]:
     return [
-        [score_row_label(row.get("category")), row.get("score", ""), row.get("evidence", "")]
-        for row in context.get("scores", [])
+        [
+            plain_category_label(row.get("category", "")),
+            score_display(row.get("score", "")),
+            humanize_text(row.get("evidence", ""), **humanize_options),
+        ]
+        for row in sorted(context.get("scores", []), key=score_order)
     ]
 
 
@@ -382,7 +387,3 @@ def checks_not_run(context: dict[str, Any]) -> list[str]:
         elif isinstance(row, dict):
             output.append(f"{row.get('check', '')} — {row.get('reason', '')} Impact: {row.get('impact', '')}".strip())
     return output
-
-
-def public_category_label(key: str) -> str:
-    return CATEGORY_LABELS.get(key, key)

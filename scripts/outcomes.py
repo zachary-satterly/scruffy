@@ -9,6 +9,11 @@ Scruffy followed its own method. They say nothing about value. Value is:
   verified   approved items whose executable acceptance checks passed
   reopened   items that came back after being called fixed
 
+Approved and verified count each item once across the supplied history; fixed
+and cleared describe its latest state. Resolved is the union of items observed
+fixed or reopened, so reopening and then fixing an item does not inflate the
+reopen-rate denominator. Item identity is scoped to its audit.
+
 Feed it one or more revisions (registry + decisions + optional verification)
 and it emits `outcomes.json` plus a table, per category and per kind. A rule
 or category whose leads are never approved is a candidate for retirement; a
@@ -24,7 +29,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-ACTIVE = {"open", "needs-verification"}
+from validate_audit import validate_registry, validate_decisions, validate_verification_receipt
 
 
 def load(path: Path | None) -> dict[str, Any]:
@@ -45,8 +50,9 @@ def decision_map(decisions: dict[str, Any]) -> dict[str, str]:
     return out
 
 
-def verification_map(verification: dict[str, Any]) -> dict[str, str]:
-    return {str(row.get("id")): str(row.get("result") or "not_run") for row in verification.get("items", []) or []}
+def verification_map(verification: dict[str, Any], registry: dict[str, Any], decisions: dict[str, Any] | None) -> dict[str, str]:
+    rows = validate_verification_receipt(verification, registry, decisions)
+    return {item_id: str(row["result"]) for item_id, row in rows.items()}
 
 
 def bucket_for(item: dict[str, Any]) -> tuple[str, str]:
@@ -59,58 +65,86 @@ def rate(numerator: int, denominator: int) -> float | None:
 
 def summarize(revisions: list[tuple[dict[str, Any], dict[str, str], dict[str, str]]]) -> dict[str, Any]:
     per_key: dict[tuple[str, str], dict[str, int]] = defaultdict(
-        lambda: {"raised": 0, "approved": 0, "deferred": 0, "rejected": 0, "pending": 0, "verified": 0, "failed": 0, "fixed": 0, "reopened": 0, "cleared": 0}
+        lambda: {"raised": 0, "approved": 0, "deferred": 0, "rejected": 0, "pending": 0, "verified": 0, "failed": 0, "fixed": 0, "reopened": 0, "cleared": 0, "resolved": 0}
     )
-    # Later revisions override earlier ones per item id, so an item raised in r1
-    # and carried into r2 counts once, in its latest state.
-    latest: dict[str, tuple[str, dict[str, Any], str, str]] = {}
+    # Keep the latest displayed state, while retaining supported achievements.
+    # Item IDs are unique within an audit, not across unrelated audited products.
+    latest: dict[tuple[str, str], dict[str, Any]] = {}
+    seen_revisions: set[tuple[str, str]] = set()
+    targets: dict[str, str] = {}
+    identity_owners: dict[tuple[str, str], str] = {}
+    positions = {(registry.get("audit_id"), registry.get("revision_id")): index for index, (registry, _, _) in enumerate(revisions)}
+    for index, (registry, _, _) in enumerate(revisions):
+        baseline = (registry.get("audit_id"), registry.get("baseline_revision_id"))
+        if baseline in positions and positions[baseline] >= index:
+            raise ValueError("revisions must be supplied oldest first within each audit")
     for registry, decisions, verification in revisions:
-        revision_id = str(registry.get("revision_id") or "")
-        for item in registry.get("items", []):
-            latest[str(item["id"])] = (
-                revision_id,
-                item,
-                decisions.get(str(item["id"]), "pending"),
-                verification.get(str(item["id"]), ""),
-            )
+        validate_registry(registry)
+        audit_id, revision_id = registry["audit_id"], registry["revision_id"]
+        revision_key = (audit_id, revision_id)
+        if revision_key in seen_revisions:
+            raise ValueError(f"duplicate audit/revision input: {audit_id}/{revision_id}")
+        seen_revisions.add(revision_key)
+        if audit_id in targets and targets[audit_id] != registry.get("target"):
+            raise ValueError(f"audit {audit_id} changed target")
+        targets[audit_id] = registry.get("target")
+        for item in registry["items"]:
+            key = (audit_id, item["id"])
+            identity = (audit_id, item["identity_key"])
+            if identity in identity_owners and identity_owners[identity] != item["id"]:
+                raise ValueError(f"{audit_id}/{item['id']} reused another item's identity")
+            identity_owners[identity] = item["id"]
+            previous = latest.get(key)
+            if previous and previous["item"]["identity_key"] != item["identity_key"]:
+                raise ValueError(f"{audit_id}/{item['id']} reused an item identity")
+            decision = decisions.get(item["id"], previous["decision"] if previous else "pending")
+            verdict = verification.get(item["id"], "")
+            references: set[str] = set()
+            for field in ("principle_refs", "detector_refs"):
+                values = item.get(field) or []
+                if not isinstance(values, list) or not all(isinstance(value, str) and value.strip() for value in values):
+                    raise ValueError(f"{audit_id}/{item['id']}.{field} must be an array of nonempty strings")
+                references.update(values)
+            latest[key] = {
+                "audit_id": audit_id, "revision_id": revision_id, "item": item,
+                "decision": decision,
+                "approved": decision == "approve" or bool(previous and previous["approved"]),
+                "verified": (decision == "approve" and verdict == "verified") or bool(previous and previous["verified"]),
+                "verification": verdict or (previous["verification"] if previous else ""),
+                "references": references | (previous["references"] if previous else set()),
+                "reopened": item.get("revision_disposition") == "reopened" or bool(previous and previous["reopened"]),
+                "resolved": item.get("status") == "fixed" or item.get("revision_disposition") == "reopened" or bool(previous and previous["resolved"]),
+            }
     rows: list[dict[str, Any]] = []
-    for revision_id, item, decision, verdict in latest.values():
+    for state in latest.values():
+        item = state["item"]
         kind, category = bucket_for(item)
         if kind == "strength":
             continue
         counts = per_key[(kind, category)]
-        status = str(item.get("status") or "")
-        disposition = str(item.get("revision_disposition") or "")
-        if status in ACTIVE:
-            counts["raised"] += 1
-            counts[{"approve": "approved", "defer": "deferred", "reject": "rejected"}.get(decision, "pending")] += 1
-            if decision == "approve":
-                if verdict == "verified":
-                    counts["verified"] += 1
-                elif verdict == "failed":
-                    counts["failed"] += 1
-        if status == "fixed":
-            counts["fixed"] += 1
-        if status == "cleared":
-            counts["cleared"] += 1
-        if disposition == "reopened":
-            counts["reopened"] += 1
-        rows.append(
-            {
-                "revision_id": revision_id,
-                "id": item["id"],
-                "kind": kind,
-                "category": category,
-                "status": status,
-                "disposition": disposition,
-                "decision": decision if status in ACTIVE else None,
-                "verification": verdict or None,
-                "rule_refs": list(item.get("principle_refs") or []) + list(item.get("detector_refs") or []),
-            }
-        )
+        status = item["status"]
+        counts["raised"] += 1
+        if state["approved"]:
+            counts["approved"] += 1
+        else:
+            counts[{"defer": "deferred", "reject": "rejected"}.get(state["decision"], "pending")] += 1
+        counts["verified"] += int(state["verified"])
+        counts["failed"] += int(state["verification"] == "failed")
+        counts["fixed"] += int(status == "fixed")
+        counts["cleared"] += int(status == "cleared")
+        counts["reopened"] += int(state["reopened"])
+        counts["resolved"] += int(state["resolved"])
+        rows.append({
+            "audit_id": state["audit_id"], "revision_id": state["revision_id"],
+            "id": item["id"], "kind": kind, "category": category, "status": status,
+            "disposition": item.get("revision_disposition", ""),
+            "decision": state["decision"], "approved": state["approved"],
+            "verified": state["verified"], "verification": state["verification"] or None,
+            "rule_refs": sorted(state["references"]),
+        })
 
     buckets = []
-    total = {"raised": 0, "approved": 0, "verified": 0, "failed": 0, "fixed": 0, "reopened": 0, "cleared": 0, "deferred": 0, "rejected": 0, "pending": 0}
+    total = {"raised": 0, "approved": 0, "verified": 0, "failed": 0, "fixed": 0, "reopened": 0, "cleared": 0, "deferred": 0, "rejected": 0, "pending": 0, "resolved": 0}
     for (kind, category), counts in sorted(per_key.items()):
         for key in total:
             total[key] += counts[key]
@@ -121,27 +155,28 @@ def summarize(revisions: list[tuple[dict[str, Any], dict[str, str], dict[str, st
                 **counts,
                 "approve_rate": rate(counts["approved"], counts["raised"]),
                 "verify_rate": rate(counts["verified"], counts["approved"]),
-                "reopen_rate": rate(counts["reopened"], counts["fixed"] + counts["reopened"]),
+                "reopen_rate": rate(counts["reopened"], counts["resolved"]),
             }
         )
     total_row = {
         **total,
         "approve_rate": rate(total["approved"], total["raised"]),
         "verify_rate": rate(total["verified"], total["approved"]),
-        "reopen_rate": rate(total["reopened"], total["fixed"] + total["reopened"]),
+        "reopen_rate": rate(total["reopened"], total["resolved"]),
     }
-    rule_counts: dict[str, dict[str, int]] = defaultdict(lambda: {"raised": 0, "approved": 0})
+    rule_counts: dict[str, dict[str, int]] = defaultdict(lambda: {"raised": 0, "approved": 0, "rejected": 0})
     for row in rows:
-        if row["decision"] is None:
-            continue
         for ref in row["rule_refs"]:
             rule_counts[str(ref)]["raised"] += 1
-            if row["decision"] == "approve":
+            if row["approved"]:
                 rule_counts[str(ref)]["approved"] += 1
-    never_approved = sorted(ref for ref, c in rule_counts.items() if c["raised"] >= 3 and c["approved"] == 0)
+            elif row["decision"] == "reject":
+                rule_counts[str(ref)]["rejected"] += 1
+    never_approved = sorted(ref for ref, c in rule_counts.items() if c["rejected"] >= 3 and c["approved"] == 0)
     return {
         "schema_version": "1.0",
         "revisions": [str(r.get("revision_id") or "") for r, _, _ in revisions],
+        "audit_revisions": [{"audit_id": r["audit_id"], "revision_id": r["revision_id"]} for r, _, _ in revisions],
         "total": total_row,
         "by_category": buckets,
         "rules": {ref: c for ref, c in sorted(rule_counts.items())},
@@ -166,7 +201,7 @@ def table(report: dict[str, Any]) -> str:
         f"{fmt(t['approve_rate']):>7} {fmt(t['verify_rate']):>7} {fmt(t['reopen_rate']):>7}"
     )
     if report["retirement_candidates"]:
-        lines.append("rules raised 3+ times and never approved: " + ", ".join(report["retirement_candidates"]))
+        lines.append("rules explicitly rejected 3+ times and never approved: " + ", ".join(report["retirement_candidates"]))
     return "\n".join(lines)
 
 
@@ -184,12 +219,27 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     revisions = []
+    input_paths: list[Path] = []
     for spec in args.revision:
         parts = spec.split(":")
-        registry = load(Path(parts[0]))
-        decisions = decision_map(load(Path(parts[1]))) if len(parts) > 1 and parts[1] else {}
-        verification = verification_map(load(Path(parts[2]))) if len(parts) > 2 and parts[2] else {}
+        if len(parts) > 3 or not parts[0]:
+            raise ValueError("each revision must be findings[:decisions[:verification]]")
+        paths = [Path(part) if part else None for part in parts]
+        input_paths.extend(path.resolve() for path in paths if path is not None)
+        registry = load(paths[0])
+        validate_registry(registry)
+        decision_document = load(paths[1]) if len(paths) > 1 and paths[1] else None
+        if decision_document is not None:
+            validate_decisions(decision_document, registry)
+        decisions = decision_map(decision_document) if decision_document is not None else {}
+        verification = {}
+        if len(paths) > 2 and paths[2]:
+            if decision_document is None:
+                raise ValueError("verification requires matching decisions to establish approval")
+            verification = verification_map(load(paths[2]), registry, decision_document)
         revisions.append((registry, decisions, verification))
+    if args.output.resolve() in input_paths:
+        raise ValueError("--output must not overwrite an input artifact")
     report = summarize(revisions)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(table(report))
@@ -198,4 +248,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"FAIL: {error}")
