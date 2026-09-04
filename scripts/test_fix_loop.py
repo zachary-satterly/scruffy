@@ -108,6 +108,10 @@ def main() -> int:
             raise SystemExit("FAIL: dry run must not execute or pass commands")
 
         run("scripts/verify_fixes.py", str(good_path), "--decisions", str(decisions_path), "--results", str(results_path), "--execute", "--output", str(verification), succeeds=False, contains="1 failed, 1 manual")
+        failure_output = run("scripts/verify_fixes.py", str(good_path), "--decisions", str(decisions_path), "--execute", "--output", str(verification), succeeds=False)
+        if not failure_output.startswith("FAIL:"):
+            raise SystemExit("FAIL: failed verification must not print a PASS banner")
+        run("scripts/verify_fixes.py", str(good_path), "--decisions", str(decisions_path), "--results", str(results_path), "--execute", "--output", str(verification), succeeds=False)
         executed = json.loads(verification.read_text(encoding="utf-8"))
         by_id = {row["id"]: row for row in executed["items"]}
         if by_id["AS-01"]["result"] != "failed" or by_id["AS-02"]["result"] != "manual":

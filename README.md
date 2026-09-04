@@ -148,7 +148,7 @@ An audit produces a bundle of three JSON files: `findings.json` (the registry, s
 | Self-contained decision dashboard (HTML) | `scripts/render_dashboard.py findings.json context.json decisions.json audit-report.html` |
 | Full Markdown report | `scripts/render_markdown.py findings.json context.json decisions.json audit-report.md` |
 | 150-word decision brief: verdict, at most three items to decide, cleared suspicions, checks not run | `scripts/render_brief.py findings.json --context context.json --decisions decisions.json --output brief.md` |
-| Shareable one-pager with a process badge (audited, revision, registry hash; never a quality score) | `scripts/render_onepager.py findings.json context.json onepager.html` |
+| Shareable one-pager with selected highlights and a registry hash (not audit certification) | `scripts/render_onepager.py findings.json context.json onepager.html` |
 
 Other useful entry points:
 

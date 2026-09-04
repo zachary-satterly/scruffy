@@ -28,22 +28,15 @@ import argparse
 import datetime as dt
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
-ACTIVE = {"open", "needs-verification"}
-CHECK_KINDS = {"command", "dom_state", "measurement", "manual"}
-EFFORTS = {"S", "M", "L"}
-TARGET_KINDS = {"file", "selector", "route", "url", "component"}
+from validate_audit import ACTIVE_STATUSES as ACTIVE, load_json, validate_decisions
 
 
 def load(path: Path | None) -> dict[str, Any]:
-    if path is None:
-        return {}
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise SystemExit(f"FAIL: {path} must contain an object")
-    return data
+    return {} if path is None else load_json(path)
 
 
 def decision_map(decisions: dict[str, Any]) -> dict[str, str]:
@@ -65,6 +58,8 @@ def run_command(check: dict[str, Any], cwd: Path, execute: bool) -> tuple[str, s
         )
     except subprocess.TimeoutExpired:
         return "fail", "timed out"
+    except OSError as error:
+        return "fail", f"could not run command: {error}"
     expect = check.get("expect") or {}
     wanted_code = int(expect.get("exit_code", 0)) if isinstance(expect, dict) else 0
     if completed.returncode != wanted_code:
@@ -121,49 +116,70 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cwd", type=Path, default=Path.cwd(), help="working directory for command checks")
     parser.add_argument("--execute", action="store_true", help="actually run command checks")
     parser.add_argument("--output", type=Path, default=Path("verification.json"))
-    parser.add_argument("--include-pending", action="store_true", help="also evaluate undecided items")
+    parser.add_argument("--include-pending", action="store_true", help="preview undecided items; incompatible with --execute")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    if args.execute and args.include_pending:
+        raise SystemExit("FAIL: --include-pending is preview-only and cannot be combined with --execute")
     registry = load(args.registry)
-    decisions = decision_map(load(args.decisions))
+    decision_document = load(args.decisions)
+    # Validate the entire bundle before the first command or receipt write.
+    validate_decisions(decision_document, registry)
+    decisions = decision_map(decision_document)
     results = load(args.results)
-    items_out: list[dict[str, Any]] = []
-    skipped: list[dict[str, str]] = []
-    for item in registry.get("items", []):
-        if item.get("kind") not in {"finding", "enhancement"} or item.get("status") not in ACTIVE:
-            continue
-        decision = decisions.get(str(item["id"]), "pending")
-        if decision != "approve" and not (args.include_pending and decision == "pending"):
-            continue
-        packet = item.get("fix_packet")
-        if not isinstance(packet, dict):
-            skipped.append({"id": item["id"], "reason": "no fix_packet; acceptance is prose only"})
-            continue
-        row = evaluate(item, packet, results, args.cwd, args.execute)
-        row["decision"] = decision
-        items_out.append(row)
+    if not args.cwd.is_dir():
+        raise SystemExit("FAIL: --cwd must be an existing directory")
+    inputs = [path.resolve() for path in (args.registry, args.decisions, args.results) if path is not None]
+    if args.output.resolve() in inputs:
+        raise SystemExit("FAIL: --output must not overwrite an input artifact")
+    if args.output.exists() and not args.output.is_file():
+        raise SystemExit("FAIL: --output must name a file")
+    # Reserve a writable sibling before execution, then atomically publish the
+    # receipt. A misspelled/unwritable parent must fail before side effects.
+    with tempfile.TemporaryDirectory(prefix=".scruffy-verification-", dir=args.output.parent) as staging:
+        items_out: list[dict[str, Any]] = []
+        skipped: list[dict[str, str]] = []
+        for item in registry.get("items", []):
+            if item.get("kind") not in {"finding", "enhancement"} or item.get("status") not in ACTIVE:
+                continue
+            decision = decisions.get(str(item["id"]), "pending")
+            if decision != "approve" and not (args.include_pending and decision == "pending"):
+                continue
+            packet = item.get("fix_packet")
+            if not isinstance(packet, dict):
+                skipped.append({"id": item["id"], "reason": "no fix_packet; acceptance is prose only"})
+                continue
+            row = evaluate(item, packet, results, args.cwd, args.execute)
+            row["decision"] = decision
+            items_out.append(row)
 
-    report = {
-        "schema_version": "1.0",
-        "audit_id": registry.get("audit_id"),
-        "revision_id": registry.get("revision_id"),
-        "verified_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
-        "executed_commands": bool(args.execute),
-        "items": items_out,
-        "skipped": skipped,
-    }
-    args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    counts = {k: sum(1 for r in items_out if r["result"] == k) for k in ("verified", "failed", "manual", "not_run")}
-    print(
-        f"PASS: {len(items_out)} approved items evaluated — "
-        f"{counts['verified']} verified, {counts['failed']} failed, {counts['manual']} manual, "
-        f"{counts['not_run']} not run; {len(skipped)} skipped without a fix packet -> {args.output}"
-    )
-    return 1 if counts["failed"] else 0
+        report = {
+            "schema_version": "1.0",
+            "audit_id": registry.get("audit_id"),
+            "revision_id": registry.get("revision_id"),
+            "verified_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
+            "executed_commands": bool(args.execute),
+            "items": items_out,
+            "skipped": skipped,
+        }
+        receipt = Path(staging) / "verification.json"
+        receipt.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        receipt.replace(args.output)
+        counts = {k: sum(1 for r in items_out if r["result"] == k) for k in ("verified", "failed", "manual", "not_run")}
+        status = "FAIL" if counts["failed"] else ("PASS" if items_out and counts["verified"] == len(items_out) and not skipped else "INCOMPLETE")
+        print(
+            f"{status}: {len(items_out)} selected items evaluated — "
+            f"{counts['verified']} verified, {counts['failed']} failed, {counts['manual']} manual, "
+            f"{counts['not_run']} not run; {len(skipped)} skipped without a fix packet -> {args.output}"
+        )
+        return 1 if counts["failed"] else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"FAIL: {error}")

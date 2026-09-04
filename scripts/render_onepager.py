@@ -1,22 +1,35 @@
 #!/usr/bin/env python3
-"""Shareable one-pager (bet B2): verdict, worst-first ledger, strengths, process badge.
+"""Shareable one-pager: verdict, worst-first ledger, strengths, registry receipt.
 
-The badge asserts process, never quality: audited, revision, registry hash.
+The receipt identifies the supplied registry; it does not certify an audit.
 Single self-contained file; no fake scores anywhere.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
-import json
+import re
 import sys
 from pathlib import Path
 
 from report_contract import referral_rows, score_row_label
+from validate_audit import load_json, validate_registry, validate_context
 
 
 def esc(value: object) -> str:
     return (str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def score_order(row: dict) -> tuple[int, int]:
+    value = row.get("score")
+    if type(value) is int and 0 <= value <= 3:
+        return 0, -value
+    # Schema 2.0 reports used display strings rather than numeric scores.
+    if isinstance(value, str):
+        match = re.match(r"^([0-3])(?:\s*[·—-]|\s*$)", value)
+        if match:
+            return 0, -int(match.group(1))
+    return 1, 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,14 +38,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("context", type=Path)
     parser.add_argument("output", type=Path)
     args = parser.parse_args(argv)
-    registry = json.loads(args.findings.read_text(encoding="utf-8"))
-    context = json.loads(args.context.read_text(encoding="utf-8"))
+    registry = load_json(args.findings)
+    context = load_json(args.context)
+    validate_registry(registry)
+    validate_context(context, registry, base_path=args.context.parent)
     digest = hashlib.sha256(args.findings.read_bytes()).hexdigest()
     outcome = context.get("outcome", {})
     scores = list(context.get("scores", []))
-    scores.sort(key=lambda row: (0, -row["score"]) if isinstance(row.get("score"), int) else (1, 0))
+    scores.sort(key=score_order)
     strengths = [i for i in registry["items"] if i["kind"] == "strength"]
     open_findings = [i for i in registry["items"] if i["kind"] == "finding" and i["status"] in {"open", "needs-verification"}]
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    open_findings.sort(key=lambda item: severity_order.get(item["severity"], 4))
     open_assumptions = [row for row in context.get("assumptions", []) if row.get("status") == "open"]
     rows = "".join(
         f'<tr><td>{esc(score_row_label(row.get("category")))}</td>'
@@ -66,7 +83,7 @@ ul{{padding-left:20px}}li{{margin:4px 0}}
 .badge b{{letter-spacing:.05em}} .badge code{{font:11px/1 ui-monospace,monospace;overflow-wrap:anywhere}}
 @media print{{body{{padding:0}}}}
 </style></head><body>
-<p class="micro">Scruffy audit · {esc(registry['audit_id'])} · revision {esc(registry['revision_id'])} · nothing hidden</p>
+<p class="micro">Scruffy audit · {esc(registry['audit_id'])} · revision {esc(registry['revision_id'])} · selected highlights</p>
 <h1>{esc(outcome.get('label',''))} — {esc(outcome.get('summary','').split('.')[0])}.</h1>
 <h2>The eight slop categories, worst first</h2>
 <table><tr><th>Category</th><th>Score</th><th>Evidence</th></tr>{rows}</table>
@@ -74,9 +91,9 @@ ul{{padding-left:20px}}li{{margin:4px 0}}
 <h2>Strengths worth preserving</h2><ul>{strength_list or '<li>None recorded.</li>'}</ul>
 <h2>Open assumptions</h2><ul>{assumption_list or '<li>None recorded.</li>'}</ul>
 <h2>Specialist boundaries</h2><ul>{referral_list or '<li>No specialist referrals recorded.</li>'}</ul>
-<div class="badge"><b>SCRUFFY-AUDITED · PROCESS CLAIM ONLY</b><br>
-This badge asserts that a durable, validator-enforced audit registry exists for this
-target and that no prior item was silently dropped. It asserts nothing about quality.
+<div class="badge"><b>REGISTRY SUMMARY</b><br>
+This receipt identifies the supplied registry. It does not certify completed
+checks, continuity against prior revisions, or product quality. Consult the full audit for evidence and coverage.
 Registry SHA-256: <code>{digest}</code></div>
 </body></html>"""
     args.output.write_text(html, encoding="utf-8")
@@ -85,4 +102,8 @@ Registry SHA-256: <code>{digest}</code></div>
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (OSError, ValueError) as error:
+        print(f"FAIL: {error}", file=sys.stderr)
+        sys.exit(1)

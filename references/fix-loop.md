@@ -56,7 +56,16 @@ python3 scripts/verify_fixes.py findings.json \
   --output verification.json
 ```
 
-`command` checks execute directly. For `dom_state` and `measurement` checks the
+Before any command or receipt write, the verifier validates the registry and
+its decisions together. Audit and revision identifiers must match; duplicate or
+orphan approvals and malformed packets are refused. `--include-pending` is a
+preview option and cannot be combined with `--execute`.
+
+`command` checks execute through the local shell only with `--execute`. Review
+the command text and target working directory before execution; this runner is
+not a sandbox. A command timeout must be a positive integer in seconds, an
+expected exit code must be an integer, and an expected output substring must
+be a string. For `dom_state` and `measurement` checks the
 agent can run in a browser, supply the outcomes with `--results` (a JSON object
 keyed `"ITEM-ID:index"`). `manual` checks never pass automatically and stay
 visibly second-class.
@@ -72,7 +81,11 @@ where status changes: it loads this revision as its baseline, re-operates the
 interface, and only then may mark an item `fixed`. When the prior item carried a
 `fix_packet`, that `fixed` disposition needs `verification.json` evidence —
 `validate_audit.py --baseline <prior> --verification verification.json`
-enforces it.
+enforces it. The receipt's audit and revision identifiers must match the
+baseline that promised the checks. Each fixed item needs one approved result
+with every promised check, in order and with its original kind. Executable
+checks must pass; manual checks remain manual and require re-audit judgment.
+Free-text overrides and evidence-ID prefixes cannot bypass this check.
 
 ## Repair stage
 

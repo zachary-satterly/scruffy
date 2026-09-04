@@ -80,20 +80,12 @@ Changes to findings, decisions, reporting, or repeat-audit behavior must preserv
 ## Validation
 
 ```sh
-python3 scripts/validate_skill.py
-python3 scripts/claude_adapter.py --check
-python3 scripts/validate_corpus.py
-python3 scripts/validate_sources.py
-python3 scripts/test_durability.py
-python3 scripts/test_audit_contract.py
-python3 scripts/test_sentence_slop.py
-python3 scripts/test_category_gates.py
-python3 scripts/test_scaffold_audit.py
-python3 scripts/test_blind_protocol.py
-python3 scripts/test_blind_evaluator.py
-python3 scripts/test_sentence_blind_runner.py
-python3 scripts/test_fix_loop.py
+python3 scripts/check.py
 ```
+
+This runs the package validators and every `test_*.py` script in `scripts/`
+and `mop/scripts/`, including newly added regression suites. Use
+`python3 scripts/check.py --list` to inspect the exact checks.
 
 When editing registry tooling, also prove the expected failure. The durability suite includes invalid fixtures for silent omission and ID reuse; add another invalid fixture when introducing a new invariant.
 

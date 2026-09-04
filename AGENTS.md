@@ -87,22 +87,12 @@ Root `SKILL.md` is the sole runtime instruction source. Never add audit rules to
 Run the complete dependency-free suite before committing:
 
 ```sh
-python3 scripts/validate_skill.py
-python3 scripts/claude_adapter.py --check
-python3 scripts/validate_corpus.py
-python3 scripts/validate_sources.py
-python3 scripts/test_durability.py
-python3 scripts/test_audit_contract.py
-python3 scripts/test_sentence_slop.py
-python3 scripts/test_blind_protocol.py
-python3 scripts/test_blind_evaluator.py
-python3 scripts/test_fix_loop.py
-python3 scripts/test_sentence_blind_runner.py
-python3 scripts/test_web_fixtures.py
-python3 scripts/rule_engine.py --check
-python3 scripts/test_rule_engine.py
-python3 scripts/test_product_surfaces.py
+python3 scripts/check.py
 ```
+
+This runs the package validators and every `test_*.py` script in `scripts/`
+and `mop/scripts/`, including newly added regression suites. Use
+`python3 scripts/check.py --list` to inspect the exact checks.
 
 When Claude Code is installed, also run `claude plugin validate .`. If behavior
 changed, record the fresh forward-test prompt, capabilities, raw artifacts,
@@ -132,8 +122,8 @@ Scruffy's schema. Its maintainer contract is `mop/AGENTS.md`, its runtime is
 - Change Scruffy's output contract only here (in `references/`, `schema/`); the
   repair runtime follows. A handoff-driven schema change is proposed here, never made
   from `mop/`.
-- The repair runtime keeps its own dependency-free suite; run it alongside this one:
-  `python3 mop/scripts/test_mop.py` and `python3 mop/scripts/validate_skill.py`.
+- The shared `scripts/check.py` entry point includes the repair runtime
+  regression suite and package validator.
 
 ## Definition of done
 

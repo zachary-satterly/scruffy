@@ -11,42 +11,15 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Validate Agent Skill package
-        run: python3 scripts/validate_skill.py
-      - name: Validate generated Claude adapter
-        run: python3 scripts/claude_adapter.py --check
-      - name: Validate research corpus
-        run: python3 scripts/validate_corpus.py
-      - name: Validate source ledger
-        # Runs in consumer mode here: a fresh checkout has no transcripts/, so the
-        # evidence checks report SKIP rather than a misleading pass. The ledger
-        # checks - every ingested source must produce a cited rule, every citation
-        # must be tracked - read only committed files and are enforced in CI.
-        run: python3 scripts/validate_sources.py
-      - name: Test durable audit revisions
-        run: python3 scripts/test_durability.py
-      - name: Test canonical audit and editorial contracts
-        run: python3 scripts/test_audit_contract.py
-      - name: Test sentence-slop signals and guards
-        run: python3 scripts/test_sentence_slop.py
-      - name: Test blind-audit integrity
-        run: python3 scripts/test_blind_protocol.py
-      - name: Test blind-output evaluator
-        run: python3 scripts/test_blind_evaluator.py
-      - name: Test the fix loop (brief, fix packets, verify, outcomes)
-        run: python3 scripts/test_fix_loop.py
-      - name: Test deterministic sentence blind runner
-        run: python3 scripts/test_sentence_blind_runner.py
-      - name: Test deterministic web fixtures
-        run: python3 scripts/test_web_fixtures.py
-      - name: Validate rule packs
-        run: python3 scripts/rule_engine.py --check
-      - name: Test deterministic rule engine
-        run: python3 scripts/test_rule_engine.py
-      - name: Test product surfaces
-        run: python3 scripts/test_product_surfaces.py
+      - name: Run complete validation and regression suite
+        # Consumer checkout: source-ledger validation reports missing private
+        # transcripts as SKIP; committed ledger checks still run.
+        run: python3 scripts/check.py

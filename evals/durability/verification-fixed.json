@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "audit_id": "durability-fixture",
-  "revision_id": "r2",
+  "revision_id": "r1",
   "verified_at": "2026-09-03T00:00:00+00:00",
   "executed_commands": true,
   "items": [

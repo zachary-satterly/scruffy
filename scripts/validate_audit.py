@@ -418,6 +418,16 @@ def validate_fix_packet(packet: Any, label: str, acceptance_checks: list[Any]) -
         kind = check["kind"]
         if kind == "command":
             require_text(check.get("run"), f"{check_label}.run")
+            timeout = check.get("timeout", 120)
+            if type(timeout) is not int or timeout <= 0:
+                fail(f"{check_label}.timeout must be a positive integer")
+            expect = check.get("expect", {})
+            if not isinstance(expect, dict):
+                fail(f"{check_label}.expect must be an object")
+            if type(expect.get("exit_code", 0)) is not int:
+                fail(f"{check_label}.expect.exit_code must be an integer")
+            if "stdout_contains" in expect and not isinstance(expect["stdout_contains"], str):
+                fail(f"{check_label}.expect.stdout_contains must be a string")
         elif kind in {"dom_state", "measurement"}:
             if not isinstance(check.get("expect"), dict) or not check["expect"]:
                 fail(f"{check_label}.expect must be an object describing the expected state or threshold")
@@ -667,15 +677,14 @@ def validate_fix_verification(
     reaches only those items; everything else keeps judgment-based behaviour.
     """
     prior_packets = {
-        item["id"]
+        item["id"]: item["fix_packet"]
         for item in baseline.get("items", [])
         if isinstance(item, dict)
         and item.get("status") in ACTIVE_STATUSES
         and isinstance(item.get("fix_packet"), dict)
     }
     owed = [
-        item
-        for item in current.get("items", [])
+        item for item in current.get("items", [])
         if isinstance(item, dict) and item.get("status") == "fixed" and item.get("id") in prior_packets
     ]
     if not owed:
@@ -685,35 +694,43 @@ def validate_fix_verification(
             "items marked fixed carried a baseline fix_packet but no --verification was supplied: "
             + ", ".join(sorted(item["id"] for item in owed))
         )
-    proven: dict[str, list[dict[str, Any]]] = {}
-    for row in verification.get("items", []) or []:
-        if isinstance(row, dict) and row.get("id"):
-            proven.setdefault(str(row["id"]), []).append(row)
+    if verification.get("schema_version") != "1.0":
+        fail("verification.schema_version must be 1.0")
+    for field in ("audit_id", "revision_id"):
+        if verification.get(field) != baseline.get(field):
+            fail(f"verification.{field} must match the baseline registry")
+    rows = verification.get("items")
+    if not isinstance(rows, list):
+        fail("verification.items must be an array")
+    proven: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            fail("verification.items entries must be objects")
+        item_id = require_text(row.get("id"), "verification item id")
+        if item_id in proven:
+            fail(f"duplicate verification entry for {item_id}")
+        proven[item_id] = row
     for item in owed:
-        item_id = str(item["id"])
-        note = item.get("verification_override")
-        if isinstance(note, str) and note.strip():
-            continue
-        if any(
-            isinstance(ref, str) and ref.startswith("specialist_review")
-            for ref in item.get("evidence_refs", []) or []
-        ):
-            continue
-        rows = proven.get(item_id)
-        if not rows:
+        item_id = item["id"]
+        row = proven.get(item_id)
+        if row is None:
             fail(f"{item_id} is fixed and carried a fix_packet but verification.json has no entry for it")
-        for row in rows:
-            checks = row.get("checks") or []
-            failing = [
-                check
-                for check in checks
-                if isinstance(check, dict)
-                and check.get("kind") != "manual"
-                and check.get("result") != "pass"
-            ]
-            if not checks or failing:
-                detail = ", ".join(str(check.get("summary") or check.get("kind")) for check in failing) or "no checks recorded"
-                fail(f"{item_id} is fixed but its verification checks did not all pass: {detail}")
+        if row.get("decision") != "approve" or row.get("result") not in {"verified", "manual"}:
+            fail(f"{item_id} needs approved, successful verification evidence")
+        expected = prior_packets[item_id]["acceptance"]
+        checks = row.get("checks")
+        if not isinstance(checks, list) or len(checks) != len(expected):
+            fail(f"{item_id} verification must cover every baseline acceptance check")
+        for index, (check, promised) in enumerate(zip(checks, expected)):
+            if not isinstance(check, dict) or type(check.get("index")) is not int or check["index"] != index:
+                fail(f"{item_id} verification check {index} has an invalid index or shape")
+            if check.get("kind") != promised["kind"]:
+                fail(f"{item_id} verification check {index} changed the promised check kind")
+            # Manual acceptance still needs re-audit judgment. It cannot replace
+            # an executable check, and an untyped override cannot skip proof.
+            allowed = {"manual"} if promised["kind"] == "manual" else {"pass"}
+            if check.get("result") not in allowed:
+                fail(f"{item_id} is fixed but its verification checks did not all pass: check {index}")
 
 
 def validate_decisions(decisions: dict[str, Any], registry: dict[str, Any], baseline_decisions: dict[str, Any] | None = None) -> None:
