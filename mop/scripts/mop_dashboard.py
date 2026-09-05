@@ -28,6 +28,7 @@ import base64
 import copy
 import html
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -42,6 +43,8 @@ from mop_bundle import TERMINAL_STATUSES, InteropError, build_plan, load_bundle,
 #   "directions":  {"ITEM_ID":{"recommended":..,"principle":..,"alternates":[..]}}
 # }
 
+_HREF_SCHEME = re.compile(r"https?://", re.IGNORECASE)
+_SCRIPT_SLOT = re.compile(r"__(?:AUDIT|DIRECTIONS|DECISIONS)__")
 _DECISIONS = ("approve", "defer", "reject", "pending")
 _DECISION_LABEL = {"approve": "Approve", "defer": "Defer", "reject": "Reject", "pending": "Pending"}
 _ACTIONABLE_KINDS = ("finding", "enhancement")
@@ -137,6 +140,24 @@ def _resolve_preflight(assets: dict, base: Path) -> dict | None:
 
 def _e(text) -> str:
     return html.escape(str(text if text is not None else ""))
+
+
+def _safe_href(url) -> str | None:
+    """Escaped http(s) href, or None.
+
+    A reference URL arrives in the assets manifest, which is written while
+    reading a target nobody controls. Escaping alone keeps it inside the
+    attribute but still lets ``javascript:`` run when the reader clicks it.
+    """
+    text = str(url or "").strip()
+    if not _HREF_SCHEME.match(text):
+        return None
+    return _e(text)
+
+
+def _script_json(value) -> str:
+    """JSON safe to embed in a <script> block: ``</`` cannot close the element."""
+    return json.dumps(value).replace("</", "<\\/")
 
 
 def _ordered_items(bundle: dict) -> list[dict]:
@@ -326,7 +347,7 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
                  f'<p class="meta">{_e(kind)} &middot; <b class="cat">{_e(category_label(item.get("category")))}</b> &middot; '
                  f'{_e(item.get("severity"))} severity &middot; {_e(item.get("confidence"))} confidence &middot; '
                  f'{_e(_STATUS_LABEL.get(status, status.replace("-", " ").title()))} &middot; <code>{_e(iid)}</code></p></div>'
-                 f'<span class="dpill dpill-{badge_class}" data-pill="{iid}">{_e(badge_text)}</span></div>')
+                 f'<span class="dpill dpill-{badge_class}" data-pill="{_e(iid)}">{_e(badge_text)}</span></div>')
         p.append(f'<div class="tabs" role="tablist"><button class="tab on" data-tab="finding" data-for="{_e(iid)}">Finding</button>'
                  f'<button class="tab" data-tab="provenance" data-for="{_e(iid)}">Provenance</button></div>')
         p.append(f'<div class="ibody tabpane on" data-pane="finding" data-for="{_e(iid)}">')
@@ -395,7 +416,8 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
             for r in item_refs:
                 app = _e(r.get("app", "reference"))
                 note_r = f' &mdash; {_e(r["note"])}' if r.get("note") else ""
-                link = f' <a href="{_e(r["url"])}">source</a>' if r.get("url") else ""
+                href = _safe_href(r.get("url"))
+                link = f' <a href="{href}" rel="noopener noreferrer">source</a>' if href else ""
                 p.append(f'<figure><img src="{ref_uri[r["path"]]}" alt="{app}">'
                          f'<figcaption><b>{app}</b>{note_r}{link}</figcaption></figure>')
             p.append('</div>')
@@ -403,7 +425,7 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
         # Active findings/enhancements get controls. Terminal rows retain their
         # prior choice as history but can never be re-approved from this surface.
         if actionable:
-            p.append(f'<div class="decide dec-{cur}" data-item-id="{iid}" data-decision="{cur}">')
+            p.append(f'<div class="decide dec-{cur}" data-item-id="{_e(iid)}" data-decision="{cur}">')
             p.append('<div class="seg" role="group" aria-label="decision">')
             for opt in ("approve", "defer", "reject"):
                 on = " on" if cur == opt else ""
@@ -469,10 +491,16 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
         "schema_version": bundle["decisions"].get("schema_version", "2.1"),
     }
     p.append(
-        _SCRIPT.replace("__AUDIT__", json.dumps(audit_meta)).replace(
-            "__DIRECTIONS__", json.dumps(direction_doc) if direction_doc else "null"
-        ).replace(
-            "__DECISIONS__", json.dumps(bundle["decisions"])
+        # One pass, not chained replaces. Chaining lets an audit_id containing
+        # the literal "__DECISIONS__" be substituted a second time, and raw
+        # json.dumps lets a "</script>" anywhere in registry text end the block.
+        _SCRIPT_SLOT.sub(
+            lambda match: {
+                "__AUDIT__": _script_json(audit_meta),
+                "__DIRECTIONS__": _script_json(direction_doc) if direction_doc else "null",
+                "__DECISIONS__": _script_json(bundle["decisions"]),
+            }[match.group(0)],
+            _SCRIPT,
         )
     )
     p.append(_TAIL)
@@ -482,11 +510,19 @@ def build_dashboard_html(bundle: dict, plan: dict, assets: dict, base: Path, dir
 
 
 def _assert_self_contained(doc: str) -> None:
-    import re
     loaders = re.findall(r'src="([^"]+)"', doc) + re.findall(r'url\(([^)]+)\)', doc)
     external = [u for u in loaders if not u.startswith("data:")]
     if external:
         raise InteropError(f"dashboard is not self-contained; external loaders: {external}")
+    # Links may leave the file, but only over http(s). A javascript: or data:
+    # href executes in the reader's browser, which "self-contained" would
+    # otherwise quietly certify as safe.
+    unsafe = [
+        href for href in re.findall(r'href="([^"]*)"', doc)
+        if not (href.startswith("#") or _HREF_SCHEME.match(html.unescape(href).strip()))
+    ]
+    if unsafe:
+        raise InteropError(f"dashboard carries non-http links: {unsafe}")
 
 
 def render(

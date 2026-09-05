@@ -954,12 +954,18 @@ def validate_context(
             except (OSError, ValueError) as error:
                 fail(f"{label}.locator: {error}")
         if kind in {"screenshot", "source", "runtime_trace", "copy_sample", "analysis_receipt"} and not explicit_uri and verification == "captured":
+            from evidence_assets import confined_path
             candidate_text = re.sub(r":\d+$", "", locator.split("#", 1)[0])
-            candidate = Path(candidate_text)
-            if not candidate.is_absolute():
-                candidate = base_path / candidate
-            if not candidate.exists():
-                fail(f"{label}.locator does not exist: {locator}")
+            # Probing an unconfined path turns validation into a file-existence
+            # oracle for the auditor's own machine: a bundle from elsewhere
+            # learns what exists at ~/.aws/credentials from a pass/fail.
+            try:
+                candidate = confined_path(candidate_text, base_path)
+            except (OSError, ValueError) as error:
+                fail(f"{label}.locator: {error}")
+            else:
+                if not candidate.exists():
+                    fail(f"{label}.locator does not exist: {locator}")
         if kind == "specialist_review":
             receipt = asset.get("specialist_review")
             if not isinstance(receipt, dict):
@@ -984,11 +990,14 @@ def validate_context(
             if verification == "not_verified" and receipt.get("verification_state") == "verified":
                 fail(f"{label}.specialist_review cannot be verified when the evidence asset is not_verified")
             if not explicit_uri and verification != "not_verified":
-                candidate = Path(locator.split("#", 1)[0])
-                if not candidate.is_absolute():
-                    candidate = base_path / candidate
-                if not candidate.exists():
-                    fail(f"{label}.locator does not exist: {locator}")
+                from evidence_assets import confined_path
+                try:
+                    candidate = confined_path(locator.split("#", 1)[0], base_path)
+                except (OSError, ValueError) as error:
+                    fail(f"{label}.locator: {error}")
+                else:
+                    if not candidate.exists():
+                        fail(f"{label}.locator does not exist: {locator}")
         by_evidence[evidence_id] = asset
 
     def check_refs(value: Any, label: str, *, allow_empty: bool = False) -> list[str]:

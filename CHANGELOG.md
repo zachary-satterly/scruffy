@@ -2,6 +2,34 @@
 
 All notable changes to the public Scruffy skill, formerly Anti-Slop, are documented here.
 
+## Unreleased
+
+- Closed the escaping holes 4.0.0 left in the repair dashboard. Bounded command
+  execution and confined raster evidence covered the file-read and command paths;
+  the rendered HTML still trusted three fields it should not have.
+  - Registry item ids were interpolated raw into `data-pill` and `data-item-id`
+    while the neighbouring `data-history-item-id` was escaped. An id is stored
+    XSS in a file that gets shared with a team.
+  - A reference `url` was escaped into an `href` but not scheme-checked, so
+    `javascript:` executed on click. Links are now `http(s)`-only, and
+    `_assert_self_contained` refuses a non-http link instead of certifying the
+    file as safe.
+  - Dashboard JSON was substituted by chained `str.replace` with no `</` escape:
+    a `</script>` in any registry text ended the block early, and an `audit_id`
+    containing `__DECISIONS__` was itself treated as a template placeholder. The
+    template now fills in a single pass with escaped payloads.
+- Finished the locator confinement started in 4.0.0. `confined_path` guarded
+  `screenshot` locators; `source`, `runtime_trace`, `copy_sample`,
+  `analysis_receipt`, and `specialist_review` still probed unconfined paths with
+  `.exists()`, so a crafted bundle could read pass/fail as a file-existence
+  oracle for the auditor's machine.
+- New `SECURITY.md`: reporting route, scope, and the threat model a skill needs
+  and a library does not — the audited product and the artifacts an agent writes
+  about it are both untrusted, and `--execute` runs commands a model authored.
+- New `scripts/test_security_guards.py` encodes each attack above, with an
+  adjacent guard per case so the fix cannot be tightened into a false positive.
+  `check.py` discovers it automatically.
+
 ## 4.0.0 — 2026-09-04
 
 ### Upgrade requirements

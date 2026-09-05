@@ -297,6 +297,8 @@ outperforms another reviewer.
 
 Read [`AGENTS.md`](AGENTS.md) before changing anything; it maps every canonical source to its generated projection and defines what counts as done. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers adding a rule pack of your own (local, uncommitted, no review) versus adding a principle to the shared corpus (source registered, ledger row added, regression plus false-positive guard, forward test on a target the rule was not written against). Transcripts used for research are gitignored and never redistributed.
 
+[`SECURITY.md`](SECURITY.md) has the reporting route and the threat model. The short version: a skill runs on your machine with your file access, and the JSON an agent writes about an audited product is as untrusted as the product itself, so evidence paths are confined to their bundle, dashboards escape what they render and link only over `http(s)`, and commands run as an `argv` with no shell unless you opt in. Read a fix packet's commands before passing `--execute`.
+
 ## Quality and implementation
 
 The current toolkit includes static lead detection, audit scaffolding, evidence
