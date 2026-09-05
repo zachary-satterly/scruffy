@@ -27,7 +27,6 @@ in `evals/smoke/README.md`. It authors no browser receipts and is never blind.
 from __future__ import annotations
 
 import json
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -125,9 +124,9 @@ def run_detection_smoke() -> dict[str, Any]:
 
 def _fix_packet(router_check: str, default_check: str, *, extra: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     acceptance: list[dict[str, Any]] = [
-        {"kind": "command", "run": shlex.join([sys.executable, "-c", router_check]),
+        {"kind": "command", "argv": [sys.executable, "-c", router_check],
          "summary": "lesson-3 resolves to the shareable address /lesson/3"},
-        {"kind": "command", "run": shlex.join([sys.executable, "-c", default_check]),
+        {"kind": "command", "argv": [sys.executable, "-c", default_check],
          "summary": "neighboring invariant: home still resolves to /"},
     ]
     if extra:

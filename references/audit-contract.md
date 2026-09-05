@@ -58,6 +58,20 @@ Canonical lanes:
 - `legal_compliance` — Legal and compliance review (specialist): Legal sufficiency, jurisdiction-specific obligations, regulated claims, and policy approval.
 - `physical_testing` — Physical and real-device testing (specialist): Real-device, venue, lighting, distance, printer, projector, signage, and other physical acceptance evidence.
 
+## Observation manifest
+
+A tool that collects evidence by running something may attach one optional `observation_manifest` to the receipt it writes. The manifest is versioned and additive: a receipt without one stays valid, and a receipt whose manifest names an unreadable version is refused rather than downgraded.
+
+Readable manifest versions: `1.0`. Digests use `sha256` over canonical JSON.
+
+A manifest records `manifest_version`, `run_id`, `tool`, `started_at`, `completed_at`, `inputs`, `target`, `target_after`, `target_stable`, `target_binding`, `execution`, `checks_digest`, `result_counts`. `run_id` is unique per invocation, `inputs` carries a digest per `registry`/`decisions`/`results` input, `checks_digest` binds the receipt to the exact promised checks it answers, and `result_counts` separates `collected`, `imported`, `not_collected` results so imported out-of-band results are never presented as independently collected.
+
+`target` and `target_after` identify where the observation happened, captured before and after execution, using `git_commit` or `directory` identity. `target_stable` is true only when both sides carry the same byte-level fingerprint, so a check that edits its own target cannot have an earlier pass attributed to the tree that replaced it. A `git_commit` target fingerprints the commit plus the actual bytes of every in-scope modified and untracked file; commit plus status output alone is not a content fingerprint and is never recorded as one. Fingerprint scope is one of `commit_and_worktree_bytes`, `incomplete`, `unavailable`, `path_only`, and only `commit_and_worktree_bytes` is a content claim; the others record that no fingerprint was computed. Fingerprints exclude: files ignored by the target repository; file modes, ownership, and timestamps; submodule and nested-repository contents; anything outside the recorded working directory; paths the caller excluded as generated state, and the run's own receipt.
+
+Manifests record digests and fingerprints, never filesystem paths, captured process output, or command text. Author-written check summaries are copied through as-is and are not scrubbed.
+
+Validation refuses an unknown manifest version, a malformed or missing required field, a stored input digest that does not reproduce from the supplied document, a checks digest that no longer matches the registry the receipt claims to answer, and a target that does not match the environment a consumer is checking against. Target freshness is only checked when a consumer supplies a freshly read target: document-only validation cannot know whether the tree still matches, so it never implies that it does. An item cannot be `verified` in a run whose target changed. Manifests are evidence about collection conditions; they do not raise a result's authority.
+
 ## Editorial review
 
 Every active `copy` finding carries an `editorial_review` receipt. Editorial review includes content strategy, terminology, information sequence, microcopy, claims and provenance, recovery language, voice, and sentence construction.

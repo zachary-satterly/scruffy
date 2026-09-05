@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as _json
 import re
 from collections import defaultdict
 from typing import Any
@@ -127,6 +128,32 @@ PLAIN_TERM_REPLACEMENTS = (
     (r"\bN/A\b", "Not scored"),
     (r"\bAI\b", "artificial intelligence"),
 )
+
+
+def check_summary(check: dict[str, Any]) -> str:
+    """One readable line per acceptance check, whatever shape it carries.
+
+    Both review surfaces call this. An `argv` check with no author summary used
+    to fall through to "no detail recorded", which told a reviewer nothing about
+    what they were approving.
+
+    The argv form is rendered as the JSON array it is, not as a space-joined
+    command line. Argument boundaries and empty arguments stay visible, and a
+    reader is never shown something that looks like a shell line they could
+    paste — that string would not be equivalent to what actually runs.
+    """
+    summary = check.get("summary")
+    if isinstance(summary, str) and summary.strip():
+        return summary.strip()
+    argv = check.get("argv")
+    if isinstance(argv, list) and argv and all(isinstance(part, str) for part in argv):
+        return "argv: " + _json.dumps(argv, ensure_ascii=False)
+    for key in ("run", "selector", "metric"):
+        value = check.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    expect = check.get("expect")
+    return _json.dumps(expect, sort_keys=True) if expect else "no detail recorded"
 
 
 def evidence_by_id(context: dict[str, Any]) -> dict[str, dict[str, Any]]:

@@ -27,14 +27,20 @@ def run(*arguments: str, succeeds: bool = True, contains: str | None = None) -> 
     return output
 
 
-def packet(run_command: str) -> dict:
+def packet(exit_code: int) -> dict:
+    """A packet whose command check uses the executable argv form.
+
+    Legacy `run` strings and their shell opt-in are covered in
+    test_bounded_execution.py; this file exercises the loop, not the shell.
+    """
+    argv = [PYTHON, "-c", f"raise SystemExit({exit_code})"]
     return {
         "target": [{"kind": "file", "value": "index.html"}, {"kind": "route", "value": "/lessons/:slug"}],
         "change": "Read the lesson slug from the address on load and write it on navigation.",
         "effort": "M",
         "rollback": "Revert the routing commit; stored progress is untouched.",
         "acceptance": [
-            {"kind": "command", "run": run_command, "summary": "routing test passes", "check_ref": 0},
+            {"kind": "command", "argv": argv, "summary": "routing test passes", "check_ref": 0},
             {"kind": "dom_state", "selector": "main h1", "expect": {"text_contains": "Lesson 3"}, "summary": "/lessons/3 shows lesson 3"},
             {"kind": "manual", "summary": "a shared link opens the same lesson for a colleague"},
         ],
@@ -66,9 +72,9 @@ def main() -> int:
         good = copy.deepcopy(registry)
         for item in good["items"]:
             if item["id"] == "AS-02":
-                item["fix_packet"] = packet("true")
+                item["fix_packet"] = packet(0)
             if item["id"] == "AS-01":
-                item["fix_packet"] = packet("false")
+                item["fix_packet"] = packet(1)
         good_path = tmp / "findings.json"
         good_path.write_text(json.dumps(good), encoding="utf-8")
         run("scripts/validate_audit.py", str(good_path), "--context", str(context), contains="PASS")
@@ -84,7 +90,7 @@ def main() -> int:
         strength_bad = copy.deepcopy(good)
         for item in strength_bad["items"]:
             if item["kind"] == "strength":
-                item["fix_packet"] = packet("true")
+                item["fix_packet"] = packet(0)
                 break
         strength_path = tmp / "strength.json"
         strength_path.write_text(json.dumps(strength_bad), encoding="utf-8")
@@ -163,7 +169,7 @@ def main() -> int:
         packed = copy.deepcopy(bare)
         for item in packed["items"]:
             if item["id"] == "AS-01":
-                item["fix_packet"] = packet("true")
+                item["fix_packet"] = packet(0)
         packed_path = tmp / "packed.json"
         packed_path.write_text(json.dumps(packed), encoding="utf-8")
         run(

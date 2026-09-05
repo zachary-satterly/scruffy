@@ -283,6 +283,55 @@
       "not_verified"
     ]
   },
+  "observation_manifest": {
+    "schema_version": "1.0",
+    "supported_versions": [
+      "1.0"
+    ],
+    "digest_algorithm": "sha256",
+    "input_roles": [
+      "registry",
+      "decisions",
+      "results"
+    ],
+    "result_provenance": [
+      "collected",
+      "imported",
+      "not_collected"
+    ],
+    "target_identity_kinds": [
+      "git_commit",
+      "directory"
+    ],
+    "target_fingerprint_scopes": [
+      "commit_and_worktree_bytes",
+      "incomplete",
+      "unavailable",
+      "path_only"
+    ],
+    "target_fingerprint_exclusions": [
+      "files ignored by the target repository",
+      "file modes, ownership, and timestamps",
+      "submodule and nested-repository contents",
+      "anything outside the recorded working directory",
+      "paths the caller excluded as generated state, and the run's own receipt"
+    ],
+    "required_fields": [
+      "manifest_version",
+      "run_id",
+      "tool",
+      "started_at",
+      "completed_at",
+      "inputs",
+      "target",
+      "target_after",
+      "target_stable",
+      "target_binding",
+      "execution",
+      "checks_digest",
+      "result_counts"
+    ]
+  },
   "editorial_review": {
     "review_types": [
       "sentence_pattern",

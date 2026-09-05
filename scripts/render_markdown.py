@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from report_contract import (
+    check_summary,
     capability_rows,
     score_rows,
     PRODUCT_BASIS_LABELS,
@@ -56,15 +57,6 @@ CHECK_KIND_LABELS = {
     "measurement": "Measurement",
     "manual": "Manual",
 }
-
-
-def check_summary(check: dict[str, Any]) -> str:
-    for key in ("summary", "run", "selector", "metric"):
-        value = check.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    expect = check.get("expect")
-    return json.dumps(expect, sort_keys=True) if expect else "no detail recorded"
 
 
 def fix_packet_block(item: dict[str, Any]) -> str:

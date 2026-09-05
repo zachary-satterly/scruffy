@@ -420,7 +420,7 @@ description of it, and `manual` checks are visibly second-class.
   "effort": "M",
   "rollback": "Revert the routing commit; stored progress is untouched.",
   "acceptance": [
-    {"kind": "command", "run": "npm test -- routing", "expect": {"exit_code": 0}, "summary": "routing tests pass", "check_ref": 0},
+    {"kind": "command", "argv": ["npm", "test", "--", "routing"], "expect": {"exit_code": 0}, "summary": "routing tests pass", "check_ref": 0},
     {"kind": "dom_state", "selector": "main h1", "expect": {"text_contains": "Lesson 3"}, "summary": "/lessons/3 opens lesson 3", "check_ref": 1},
     {"kind": "measurement", "metric": "CLS", "expect": {"max": 0.1}, "summary": "layout stays stable"},
     {"kind": "manual", "summary": "a shared link opens the same lesson for a colleague"}
@@ -437,7 +437,10 @@ indexes the prose `acceptance_checks` entry the executable check proves.
 
 `scripts/verify_fixes.py findings.json --decisions decisions.json [--results results.json] [--execute] --output verification.json`
 evaluates only approved open or needs-verification items. Command checks run
-only with `--execute`; `dom_state` and `measurement` results come from a
+only with `--execute`. Prefer `argv` arrays; legacy `run` strings additionally
+require `--allow-shell`. No artifact field grants shell permission. See
+[fix-loop.md](fix-loop.md) for execution limits, artifact boundaries, and the
+optional observation manifest. `dom_state` and `measurement` results come from a
 browser or agent session through `--results` (`{"ITEM-ID:index": {"result":
 "pass"|"fail", "detail": "..."}}`); `manual` is never a pass. Per item the
 result is `verified`, `failed`, `manual`, or `not_run`. The script never edits

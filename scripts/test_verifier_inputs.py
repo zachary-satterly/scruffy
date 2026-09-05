@@ -2,7 +2,6 @@
 """Reject invalid acceptance inputs before any command or receipt write."""
 import copy
 import json
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -19,13 +18,13 @@ class VerifierInputs(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)
             marker = directory / 'executed'
-            command = shlex.join([sys.executable, '-c', f'from pathlib import Path; Path({str(marker)!r}).touch()'])
+            argv = [sys.executable, '-c', f'from pathlib import Path; Path({str(marker)!r}).touch()']
             item = next(i for i in registry['items'] if i['id'] == 'AS-02')
             item['fix_packet'] = {
                 'target': [{'kind': 'file', 'value': 'index.html'}],
                 'change': 'Restore addressable navigation.', 'effort': 'S',
                 'rollback': 'Revert the navigation change.',
-                'acceptance': [{'kind': 'command', 'run': command}],
+                'acceptance': [{'kind': 'command', 'argv': argv}],
             }
             next(r for r in decisions['decisions'] if r['item_id'] == item['id'])['decision'] = 'approve'
             cases = []
@@ -36,7 +35,13 @@ class VerifierInputs(unittest.TestCase):
             duplicate = copy.deepcopy(decisions)
             duplicate['decisions'].append(copy.deepcopy(duplicate['decisions'][0]))
             cases.append(('duplicate decision', registry, duplicate, []))
-            for patch in ({'run': ''}, {'kind': 'unknown'}, {'timeout': 0}, {'timeout': True}, {'expect': {'exit_code': 'zero'}}, {'expect': {'stdout_contains': 123}}):
+            malformed = (
+                {'run': ''},                      # argv and run together
+                {'argv': []}, {'argv': 'true'}, {'argv': ['git', 3]}, {'argv': ['', 'x']},
+                {'kind': 'unknown'}, {'timeout': 0}, {'timeout': True},
+                {'expect': {'exit_code': 'zero'}}, {'expect': {'stdout_contains': 123}},
+            )
+            for patch in malformed:
                 bad = copy.deepcopy(registry)
                 next(i for i in bad['items'] if i['id'] == 'AS-02')['fix_packet']['acceptance'][0].update(patch)
                 cases.append((str(patch), bad, decisions, []))

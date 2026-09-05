@@ -12,6 +12,7 @@ from typing import Any
 from evidence_assets import embed_raster
 
 from report_contract import (
+    check_summary,
     evidence_by_id,
     evidence_public_label,
     facet_labels,
@@ -258,16 +259,6 @@ CHECK_KIND_LABELS = {
     "measurement": "Measurement",
     "manual": "Manual",
 }
-
-
-def check_summary(check: dict[str, Any]) -> str:
-    """One readable line per acceptance check, whatever shape it carries."""
-    for key in ("summary", "run", "selector", "metric"):
-        value = check.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    expect = check.get("expect")
-    return json.dumps(expect, sort_keys=True) if expect else "no detail recorded"
 
 
 def fix_packet_html(item: dict[str, Any]) -> str:

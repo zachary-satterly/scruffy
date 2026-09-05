@@ -157,7 +157,7 @@ Other useful entry points:
 - `scripts/rule_engine.py page.html --output leads.json` runs the rule packs on their own. Add your own pack with `--pack`; see [`references/rule-packs.md`](references/rule-packs.md).
 - `scripts/validate_audit.py findings.json --context context.json --decisions decisions.json --dashboard audit-report.html --markdown audit-report.md` rejects improvised categories, contradictory modes, unauthorized writes, unresolved evidence IDs, missing captured files, and editorial findings without a review receipt. Pass `--baseline` and `--baseline-decisions` on a repeat audit. Two opt-in gates close the fix loop: `--require-fix-packets` fails when an open critical or high finding carries no executable fix packet, and `--verification verification.json` (with `--baseline`) refuses to accept an item as fixed when the baseline promised an executable check and nothing ran it.
 - `scripts/migrate_decisions.py previous-decisions.json findings.json decisions.json --prior-registry previous-findings.json` carries decisions into a new revision.
-- `scripts/verify_fixes.py findings.json --decisions decisions.json --execute` runs the executable acceptance checks attached to approved items and writes `verification.json` without touching the registry.
+- `scripts/verify_fixes.py findings.json --decisions decisions.json --execute` runs approved `argv` acceptance checks and writes `verification.json` without touching the registry. Legacy shell strings additionally require `--allow-shell`; otherwise they remain `not_run`.
 - `scripts/outcomes.py findings.json:decisions.json:verification.json ...` (one triple per revision, oldest first) reports approve, verify, and reopen rates per category and names rules that keep firing but never get approved.
 
 Report markers and browser-storage keys keep the internal `anti-slop-*` namespace from the project's former name so old registries and dashboards still load. Invocation is unaffected.
@@ -171,6 +171,41 @@ python3 mop/scripts/mop_run.py <bundle-dir> --authorized --out <repair-dir>
 ```
 
 The audit dashboard's **Copy AI handoff** button copies a paste-ready instruction — the target, the approved item IDs, `scripts/verify_fixes.py --execute`, and where to write `verification.json` — so approvals leave the browser as a task rather than as raw data. [`references/fix-loop.md`](references/fix-loop.md) is the protocol the receiving session follows.
+
+Prefer an argument array for each command check:
+
+```json
+{"kind": "command", "argv": ["python3", "-m", "unittest", "discover"], "timeout": 60}
+```
+
+The verifier runs these arguments directly. A legacy `run` string uses a shell
+only when the caller explicitly adds `--allow-shell` alongside `--execute`.
+Review the commands and target before execution: both forms run local code with
+your permissions. The verifier is not a sandbox or a network access policy.
+Review the commands in `findings.json` or the rendered fix packet; the
+verification preview shows selection and status, and omits command text.
+
+Use `--max-seconds` to cap each check's timeout and `--max-output-bytes` to bound
+capture per output stream. Checks receive a small documented environment; the repeatable
+`--env-allow NAME` flag explicitly passes an additional variable. Raw process output and command
+text are omitted from new verification receipts. Author-supplied descriptions
+and imported evidence still need review before sharing.
+
+New receipts also carry a versioned observation manifest linking the run to
+its inputs, checks, target state, and collected or imported results. Check a
+receipt against the current target explicitly:
+
+```sh
+python3 scripts/observation_manifest.py verification.json --registry findings.json --decisions decisions.json --cwd .
+```
+
+Without `--cwd`, validation checks the supplied documents but does not establish
+target freshness. Git fingerprints have declared exclusions and size limits;
+unavailable content evidence stays unavailable. Historical receipts remain
+readable, but cannot supply the new run and target bindings. A hash proves a
+byte relationship, not that a compromised host or a supplied result is truthful.
+It also does not establish that a local checkout matches a deployed URL or that
+an acceptance check adequately tests the finding. Those require separate review.
 
 ## Reference grounding
 

@@ -125,6 +125,26 @@ def load_contract(path: Path = MANIFEST) -> dict[str, Any]:
     actual_specialists = {row["key"] for row in lanes if row["owner"] == "specialist"}
     if actual_specialists != required_specialists:
         raise ValueError("review lanes must define the six canonical specialist referrals")
+    observation = data.get("observation_manifest", {})
+    if not isinstance(observation, dict):
+        raise ValueError("observation_manifest must be an object")
+    if observation.get("schema_version") != "1.0":
+        raise ValueError("observation_manifest schema_version must be 1.0")
+    supported_manifests = observation.get("supported_versions")
+    if supported_manifests != ["1.0"]:
+        raise ValueError("observation_manifest.supported_versions must list exactly the readable versions")
+    if observation.get("digest_algorithm") != "sha256":
+        raise ValueError("observation_manifest.digest_algorithm must be sha256")
+    if observation.get("target_fingerprint_scopes")[:1] != ["commit_and_worktree_bytes"]:
+        raise ValueError("observation_manifest.target_fingerprint_scopes must lead with the byte-level scope")
+    if {"target", "target_after", "target_stable", "target_binding"} - set(observation.get("required_fields", [])):
+        raise ValueError("observation_manifest.required_fields must bind identity before and after execution")
+    if observation.get("result_provenance") != ["collected", "imported", "not_collected"]:
+        raise ValueError("observation_manifest.result_provenance must separate collected, imported, and not_collected")
+    for field in ("input_roles", "target_identity_kinds", "target_fingerprint_scopes", "target_fingerprint_exclusions", "required_fields"):
+        values = observation.get(field)
+        if not isinstance(values, list) or not values or len(values) != len(set(values)) or any(not isinstance(value, str) or not value for value in values):
+            raise ValueError(f"observation_manifest.{field} must be a non-empty unique string array")
     editorial = data.get("editorial_review", {})
     if editorial.get("authorship_assessment") != "not_performed":
         raise ValueError("editorial contract must prohibit authorship assessment")
@@ -204,6 +224,34 @@ def render_reference(data: dict[str, Any]) -> str:
         lines.append(f"- `{row['key']}` — {row['label']} ({row['owner']}): {row['description']}")
     lines.extend(
         [
+            "",
+            "## Observation manifest",
+            "",
+            "A tool that collects evidence by running something may attach one optional `observation_manifest` to the receipt it writes. The manifest is versioned and additive: a receipt without one stays valid, and a receipt whose manifest names an unreadable version is refused rather than downgraded.",
+            "",
+            "Readable manifest versions: "
+            + ", ".join(f"`{value}`" for value in data["observation_manifest"]["supported_versions"])
+            + f". Digests use `{data['observation_manifest']['digest_algorithm']}` over canonical JSON.",
+            "",
+            "A manifest records "
+            + ", ".join(f"`{value}`" for value in data["observation_manifest"]["required_fields"])
+            + ". `run_id` is unique per invocation, `inputs` carries a digest per "
+            + "/".join(f"`{value}`" for value in data["observation_manifest"]["input_roles"])
+            + " input, `checks_digest` binds the receipt to the exact promised checks it answers, and `result_counts` separates "
+            + ", ".join(f"`{value}`" for value in data["observation_manifest"]["result_provenance"])
+            + " results so imported out-of-band results are never presented as independently collected.",
+            "",
+            "`target` and `target_after` identify where the observation happened, captured before and after execution, using "
+            + " or ".join(f"`{value}`" for value in data["observation_manifest"]["target_identity_kinds"])
+            + " identity. `target_stable` is true only when both sides carry the same byte-level fingerprint, so a check that edits its own target cannot have an earlier pass attributed to the tree that replaced it. A `git_commit` target fingerprints the commit plus the actual bytes of every in-scope modified and untracked file; commit plus status output alone is not a content fingerprint and is never recorded as one. Fingerprint scope is one of "
+            + ", ".join(f"`{value}`" for value in data["observation_manifest"]["target_fingerprint_scopes"])
+            + ", and only `commit_and_worktree_bytes` is a content claim; the others record that no fingerprint was computed. Fingerprints exclude: "
+            + "; ".join(data["observation_manifest"]["target_fingerprint_exclusions"])
+            + ".",
+            "",
+            "Manifests record digests and fingerprints, never filesystem paths, captured process output, or command text. Author-written check summaries are copied through as-is and are not scrubbed.",
+            "",
+            "Validation refuses an unknown manifest version, a malformed or missing required field, a stored input digest that does not reproduce from the supplied document, a checks digest that no longer matches the registry the receipt claims to answer, and a target that does not match the environment a consumer is checking against. Target freshness is only checked when a consumer supplies a freshly read target: document-only validation cannot know whether the tree still matches, so it never implies that it does. An item cannot be `verified` in a run whose target changed. Manifests are evidence about collection conditions; they do not raise a result's authority.",
             "",
             "## Editorial review",
             "",

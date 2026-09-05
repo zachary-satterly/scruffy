@@ -21,7 +21,7 @@ class RepairLoop(unittest.TestCase):
             item['acceptance_checks']=['The local output says ready.']
             item['fix_packet']={'target':[{'kind':'file','value':'output.txt'}],
                 'change':'Write the expected readiness state.','effort':'S','rollback':'Restore the previous output.',
-                'acceptance':[{'kind':'command','run':f'"{sys.executable}" -c "from pathlib import Path; assert Path(\'output.txt\').read_text() == \'ready\'"','summary':'Read the actual repaired file.','check_ref':0}]}
+                'acceptance':[{'kind':'command','argv':[sys.executable,'-c',"from pathlib import Path; assert Path('output.txt').read_text() == 'ready'"],'summary':'Read the actual repaired file.','check_ref':0}]}
             decisions['decisions'][0]['decision']='approve'
             for name,data in [('findings.json',registry),('context.json',context),('decisions.json',decisions)]:
                 (bundle/name).write_text(json.dumps(data))

@@ -52,7 +52,7 @@ After implementation, run:
 python3 scripts/verify_fixes.py findings.json \
   --decisions decisions.json \
   --execute \
-  --cwd <target repo root> \
+  --cwd . \
   --output verification.json
 ```
 
@@ -61,14 +61,95 @@ its decisions together. Audit and revision identifiers must match; duplicate or
 orphan approvals and malformed packets are refused. `--include-pending` is a
 preview option and cannot be combined with `--execute`.
 
-`command` checks execute through the local shell only with `--execute`. Review
-the command text and target working directory before execution; this runner is
-not a sandbox. A command timeout must be a positive integer in seconds, an
-expected exit code must be an integer, and an expected output substring must
-be a string. For `dom_state` and `measurement` checks the
-agent can run in a browser, supply the outcomes with `--results` (a JSON object
-keyed `"ITEM-ID:index"`). `manual` checks never pass automatically and stay
-visibly second-class.
+`command` checks run only with `--execute`. Write them as `argv` arrays:
+
+```json
+{"kind": "command", "argv": ["pytest", "-q", "tests/test_router.py"],
+ "summary": "routing tests pass"}
+```
+
+An `argv` check runs with no shell, so quoting, globs, pipes, and `$(...)` are
+literal arguments. Only the program name must be non-empty; empty string
+arguments after it are passed through. The legacy readable form —
+`"run": "pytest -q tests/test_router.py"` — still validates and still renders,
+but it needs a shell, so it executes only with `--execute` **and**
+`--allow-shell`. Without that opt-in it is recorded `not_run`, never passed. No
+field inside a packet can grant shell access; the person running the verifier
+grants it, having read the bundle.
+
+**This is not a sandbox and not a network boundary.** Both forms run trusted
+local code with your privileges. Read the commands and the target directory
+first. What the runner does bound is:
+
+- **Time.** `--max-seconds` is a caller ceiling that caps any packet timeout. A
+  timed-out check fails; on POSIX its whole process group is terminated and
+  then killed, including children.
+- **Output.** `--max-output-bytes` is applied while reading, so a check that
+  floods stdout cannot exhaust memory. Truncation is recorded, and an expected
+  substring that falls past the cap fails rather than passing unread.
+- **Environment.** Checks get a small documented environment, not your ambient
+  one. Use `--env-allow NAME` to pass a specific variable through.
+- **Artifacts.** Inputs and the receipt must resolve inside `--artifact-root`
+  (default: the registry's directory), so no symlink writes the receipt
+  somewhere nobody is looking. `--cwd` is the target and is deliberately not
+  confined.
+
+A command timeout must be a positive integer in seconds, an expected exit code
+must be an integer, and an expected output substring must be a string. For
+`dom_state` and `measurement` checks the agent can run in a browser, supply the
+outcomes with `--results` (a JSON object keyed `"ITEM-ID:index"`); they are
+recorded `provenance: imported`, because this run did not observe them.
+`manual` checks never pass automatically and stay visibly second-class.
+
+## What the receipt proves
+
+New receipts carry an `observation_manifest` (see
+[audit-contract.md](audit-contract.md)) binding results to one run: a unique
+`run_id`, digests of every input document, the target's identity before and
+after execution, a digest of the promised checks, and counts of collected
+versus imported results. Validation refuses an unknown manifest version, a
+malformed field, an input digest that no longer reproduces, or replaced
+promised checks.
+
+Content reads have a per-file size bound. Git metadata collection currently has
+a timeout but no output-size cap; a repository with an unusually large number
+of changed paths can still use substantial memory during fingerprinting.
+
+Two consequences worth knowing:
+
+- If a check changes the target while the run executes, no item in that run can
+  be `verified`. Check-level results are kept; the item-level claim is
+  withdrawn. Name generated state with `--target-ignore GLOB` when a change is
+  expected.
+- Freshness is a separate, explicit question. Document validation cannot know
+  whether the target still matches. Ask it directly:
+
+  ```sh
+  python3 scripts/observation_manifest.py verification.json \
+    --registry findings.json --cwd .
+  ```
+
+Use the actual target directory for `--cwd`; `.` means the current directory.
+The default child environment carries `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ`,
+`TMPDIR`, `SYSTEMROOT`, `COMSPEC`, `PATHEXT`, and `USERPROFILE` when present,
+plus the runner's `SCRUFFY_VERIFICATION` marker. Other variables require
+`--env-allow NAME`.
+
+Raw stdout, stderr, and command text never enter new receipts. Author-written
+summaries, titles, and imported details are copied through without secret
+redaction, so review them before sharing a report.
+
+Once preflight passes, the run takes the output path immediately: it writes a
+`run_state: started` receipt before the first check. If the run is interrupted,
+that started receipt is what remains — an incomplete run with its own `run_id`
+and no results — rather than the previous run's `verified` bytes. A completed
+run replaces it with `run_state: complete`. A run refused during preflight
+writes nothing and leaves the historical receipt untouched.
+
+Receipts written before this contract have no manifest. They remain valid and
+are not rewritten, but their provenance is weaker by construction: they cannot
+prove which run, inputs, or target produced them. Treat an unmanifested receipt
+as a claim about a run you cannot reconstruct.
 
 Write `verification.json` into the bundle directory, next to `findings.json`.
 It is the required artifact of an implementation run: an implementation with no

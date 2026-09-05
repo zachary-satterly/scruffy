@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import observation_manifest
 from audit_contract import load_contract, mode_map
 from report_contract import evidence_by_id, humanize_text, item_label_map
 from taxonomy_contract import canonical_category_keys, canonical_facet_keys, load_taxonomy
@@ -417,7 +418,29 @@ def validate_fix_packet(packet: Any, label: str, acceptance_checks: list[Any]) -
             fail(f"{check_label}.kind must be one of {sorted(FIX_PACKET_CHECK_KINDS)}")
         kind = check["kind"]
         if kind == "command":
-            require_text(check.get("run"), f"{check_label}.run")
+            # `argv` is the executable form: no shell, so metacharacters are
+            # literal arguments. `run` stays readable for existing packets and
+            # needs an explicit operator opt-in to execute.
+            argv, legacy = check.get("argv"), check.get("run")
+            if argv is not None and legacy is not None:
+                fail(f"{check_label} must define argv or run, not both")
+            if argv is None and legacy is None:
+                fail(f"{check_label} must define argv (preferred) or {check_label}.run (legacy shell string)")
+            if argv is not None:
+                if not isinstance(argv, list) or not argv:
+                    fail(f"{check_label}.argv must be a non-empty array")
+                # Only the program name must be non-empty. An empty string is a
+                # real argument with real semantics — `grep '' file`, a
+                # deliberately blank flag value — and rejecting it would make the
+                # executable form weaker than the shell string it replaces.
+                require_text(argv[0], f"{check_label}.argv[0]")
+                for position, part in enumerate(argv):
+                    if not isinstance(part, str):
+                        fail(f"{check_label}.argv[{position}] must be a string")
+                    if "\x00" in part:
+                        fail(f"{check_label}.argv[{position}] must not contain a NUL byte")
+            else:
+                require_text(legacy, f"{check_label}.run")
             timeout = check.get("timeout", 120)
             if type(timeout) is not int or timeout <= 0:
                 fail(f"{check_label}.timeout must be a positive integer")
@@ -687,6 +710,11 @@ def validate_verification_receipt(
     rows = verification.get("items")
     if not isinstance(rows, list):
         fail("verification.items must be an array")
+    # A run whose target changed underneath it may keep its check-level facts but
+    # not its item-level verdict: the tree that passed is not the tree that is
+    # there now. The receipt writes `not_run`; this is where that stays legal.
+    manifest = verification.get("observation_manifest")
+    target_changed = isinstance(manifest, dict) and manifest.get("target_stable") is False
     proven = {}
     for row in rows:
         if not isinstance(row, dict):
@@ -721,9 +749,20 @@ def validate_verification_receipt(
             outcomes.add(result)
         overall = ("failed" if "fail" in outcomes else "not_run" if not outcomes or "not_run" in outcomes
                    else "manual" if "manual" in outcomes else "verified")
-        if row.get("result") != overall:
+        if target_changed and row.get("result") == "verified":
+            fail(f"{item_id} cannot be verified: the target changed while the run executed")
+        withdrawn = target_changed and row.get("result") == "not_run" and overall == "verified"
+        if row.get("result") != overall and not withdrawn:
             fail(f"{item_id} verification result disagrees with its checks")
         proven[item_id] = row
+    # Additive and optional: receipts written before observation manifests
+    # existed stay valid. When one is present it must hold up, and it must
+    # answer this registry's promised checks rather than some other bundle's.
+    if manifest is not None:
+        try:
+            observation_manifest.validate(manifest, registry=registry, item_ids=list(proven))
+        except observation_manifest.ManifestError as error:
+            fail(str(error))
     return proven
 
 

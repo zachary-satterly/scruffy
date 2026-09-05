@@ -4,7 +4,23 @@ All notable changes to the public Scruffy skill, formerly Anti-Slop, are documen
 
 ## Unreleased
 
-_No unreleased changes._
+- Consolidated local and CI validation in `scripts/check.py`, including newly
+  discovered core and repair regression suites. CI requires Node for dashboard
+  behavior checks; unavailable private source transcripts remain explicit skips.
+- Hardened approval, lifecycle and verification-receipt validation; preserved
+  resolved items as read-only history and refused mismatched or incomplete
+  repair evidence. Added regressions across repair handoff, re-audit and outcomes.
+- Corrected report normalization, evidence handling, draft design selection and
+  relative image resolution. Removed superseded planning material and verified
+  unused helpers while retaining public compatibility paths and legacy artifacts.
+- Added a deterministic development smoke harness with defect and clean
+  controls, valid and invalid repairs, and infrastructure-failure checks. It is
+  not a browser audit or a comparative accuracy benchmark.
+- Added direct `argv` verification, explicit opt-in for legacy shell commands,
+  bounded process output and execution, and a reduced inherited environment.
+  Versioned observation manifests record run/input/check bindings and target
+  evidence; imported results remain distinguishable from collected results.
+- Updated README capabilities, verification instructions and limitations.
 
 ## 3.1.0 — 2026-09-03
 
