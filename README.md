@@ -60,6 +60,28 @@ Use `.agents/skills/scruffy` inside a project to install for that repository onl
 
 Point the agent at the root `SKILL.md`. Claude Code and Codex load that same file; `.claude-plugin/` and `agents/openai.yaml` hold distribution metadata only, and `skills/scruffy/SKILL.md` is a generated adapter that delegates to the root. An agent without a live browser or file access falls back to static analysis and marks every runtime check as not run.
 
+## Upgrade to 4.0.0
+
+This release changes command execution defaults. Legacy shell checks need
+`--allow-shell` in addition to `--execute`; otherwise they remain `not_run`.
+Prefer `argv` arrays. Commands inherit fewer environment variables; pass any
+additional required variable explicitly with `--env-allow NAME`. New receipts
+omit raw command output and command text. Existing audit artifacts and legacy
+receipts remain readable. See the [release notes](CHANGELOG.md#400--2026-09-04).
+
+For a Claude Code plugin installation, update it and restart Claude Code:
+
+```sh
+claude plugin update scruffy@scruffy-marketplace
+```
+
+For a Git checkout linked as a personal skill, run this from the checkout after
+preserving any local edits, then restart the agent:
+
+```sh
+git pull --ff-only
+```
+
 ## How an audit runs
 
 Scruffy follows five stages using the capabilities available in the host agent. Unavailable observations stay explicitly unverified.

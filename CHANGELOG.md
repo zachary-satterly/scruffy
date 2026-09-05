@@ -2,7 +2,22 @@
 
 All notable changes to the public Scruffy skill, formerly Anti-Slop, are documented here.
 
-## Unreleased
+## 4.0.0 — 2026-09-04
+
+### Upgrade requirements
+
+- Command execution has changed: legacy `run` shell strings now require both
+  `--execute` and `--allow-shell`. Without shell opt-in they remain `not_run`.
+  Prefer `argv` arrays for direct execution.
+- Commands inherit a reduced environment. Pass each additional required variable
+  explicitly with the repeatable `--env-allow NAME` option.
+- New verification receipts omit raw command output and command text. Consumers
+  that used those fields must use the recorded check outcomes and review the
+  command definition in the findings registry.
+- Existing audit artifacts and legacy verification receipts remain readable.
+  This major version marks the execution and receipt behavior changes.
+
+### Changes
 
 - Consolidated local and CI validation in `scripts/check.py`, including newly
   discovered core and repair regression suites. CI requires Node for dashboard
