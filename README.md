@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7a4f8f" alt="MIT license"></a>
 </p>
 
-Scruffy finds AI slop in web apps. It is an [Agent Skill](https://agentskills.io/specification) for Claude Code, Codex, and any other agent that can read a `SKILL.md`. Point it at a URL, a screenshot, a prototype, or a repository. It operates the interface, reads whatever source and copy it can reach, and returns findings with evidence, a severity, a confidence level, and an acceptance check for each one.
+Scruffy finds AI slop in web apps. It is an [Agent Skill](https://agentskills.io/specification) for Claude Code, Codex, and any other agent that can read a `SKILL.md`. Point it at a URL, a screenshot, a prototype, or a repository. With browser access, it operates the interface; with source access, it inspects the implementation. It returns findings with evidence, severity, confidence, and an acceptance check, and identifies what it could not test.
 
 **What “AI slop” means here:** app output that looks finished because a generator, template, or builder supplied a plausible surface while the product decisions underneath were skipped. Scruffy checks eight categories: product, information architecture, interaction, accessibility, visual, editorial, structure, and performance.
 
@@ -62,7 +62,7 @@ Point the agent at the root `SKILL.md`. Claude Code and Codex load that same fil
 
 ## How an audit runs
 
-Scruffy works in a fixed order and refuses to skip steps.
+Scruffy follows five stages using the capabilities available in the host agent. Unavailable observations stay explicitly unverified.
 
 1. **Frame.** Record the product, its audience, the task under test, constraints, and which of the nine capabilities (browser, source, screenshots, traces, write access, and so on) are actually available. A missing capability is disclosed; it is never counted as a defect and never papered over with invented proof.
 2. **Ground.** Load the cited [principle corpus](principles/PRINCIPLES.md), any taste evidence the user supplied, and, if a design-reference connector such as Mobbin MCP is connected, shipped-product references for the pattern in question. A popular pattern is evidence of convention, not of quality.
@@ -152,8 +152,8 @@ An audit produces a bundle of three JSON files: `findings.json` (the registry, s
 
 Other useful entry points:
 
-- `scripts/scaffold_audit.py --audit-id <id> --target <desc> --title <t> --out <dir>` starts a new bundle that already passes validation. Add `--mode redesign --repository-write-authority authorized` when implementation is explicitly authorized, and repeat `--supplied-screenshot <path>` to copy PNG, JPEG, GIF, or WebP evidence into the bundle.
-- `scripts/scan.py <url-or-file>` is the sixty-second front door: static leads from the rule packs plus the list of operated checks that a static pass cannot run.
+- `scripts/scaffold_audit.py --audit-id <id> --target <desc> --title <t> --out <dir>` starts a structurally valid draft bundle with placeholders and unverified observations; it does not perform an audit. Add `--mode redesign --repository-write-authority authorized` when implementation is explicitly authorized, and repeat `--supplied-screenshot <path>` to copy PNG, JPEG, GIF, or WebP evidence into the bundle.
+- `scripts/scan.py <url-or-file>` collects static leads from the rule packs and lists the operated checks that a static pass cannot run.
 - `scripts/rule_engine.py page.html --output leads.json` runs the rule packs on their own. Add your own pack with `--pack`; see [`references/rule-packs.md`](references/rule-packs.md).
 - `scripts/validate_audit.py findings.json --context context.json --decisions decisions.json --dashboard audit-report.html --markdown audit-report.md` rejects improvised categories, contradictory modes, unauthorized writes, unresolved evidence IDs, missing captured files, and editorial findings without a review receipt. Pass `--baseline` and `--baseline-decisions` on a repeat audit. Two opt-in gates close the fix loop: `--require-fix-packets` fails when an open critical or high finding carries no executable fix packet, and `--verification verification.json` (with `--baseline`) refuses to accept an item as fixed when the baseline promised an executable check and nothing ran it.
 - `scripts/migrate_decisions.py previous-decisions.json findings.json decisions.json --prior-registry previous-findings.json` carries decisions into a new revision.
@@ -189,7 +189,7 @@ SKILL.md              runtime instructions; the only file agents execute
 references/           protocols SKILL.md loads on demand (taxonomy, contract, verification, scoring, durability, blind audit, rule packs, output schema, fix loop)
 schema/               canonical data: taxonomy.json, audit-contract.json, sentence-slop-pack.json, rules/*.json
 principles/           cited research corpus, source registry, and the per-source ledger
-scripts/              validators, renderers, rule engine, tests; Python standard library only
+scripts/              Python standard-library tooling; dashboard regression tests also use Node
 evals/                fixtures: triggers, archetypes, sentence slop, durability, continuity, review routing, web fixtures
 mop/                  approved-repair stage (own SKILL.md, tests, and interop key)
 .claude-plugin/       plugin.json and marketplace.json
@@ -202,31 +202,75 @@ AGENTS.md             maintainer contract (source-of-truth map, DRY edit routes,
 
 ## Validate
 
-Everything runs on the Python standard library. This is the same list CI runs:
+Run the same entry point used by CI:
 
 ```sh
-python3 scripts/validate_skill.py
-python3 scripts/claude_adapter.py --check
-python3 scripts/validate_corpus.py
-python3 scripts/validate_sources.py
-python3 scripts/test_durability.py
-python3 scripts/test_audit_contract.py
-python3 scripts/test_sentence_slop.py
-python3 scripts/test_blind_protocol.py
-python3 scripts/test_blind_evaluator.py
-python3 scripts/test_fix_loop.py
-python3 scripts/test_sentence_blind_runner.py
-python3 scripts/test_web_fixtures.py
-python3 scripts/rule_engine.py --check
-python3 scripts/test_rule_engine.py
-python3 scripts/test_product_surfaces.py
+python3 scripts/check.py
 ```
 
-The repair stage has its own suite: `python3 mop/scripts/test_mop.py` and `python3 mop/scripts/validate_skill.py`. With Claude Code installed, `claude plugin validate .` checks the plugin manifest.
+It discovers regression scripts in both `scripts/` and `mop/scripts/` and runs
+the package and contract validators. Use `python3 scripts/check.py --list` to
+inspect the current checks. Python tests use the standard library; dashboard
+JavaScript tests also require Node. Local runs explicitly skip those tests when
+Node is unavailable; CI requires Node. Source corroboration that depends on
+unavailable private transcripts is reported separately.
+
+When Claude Code is installed, also validate both plugin packages:
+
+```sh
+claude plugin validate .
+claude plugin validate mop
+```
+
+For a focused development smoke check:
+
+```sh
+python3 scripts/run_evaluation_smoke.py
+```
+
+The [smoke fixtures](evals/smoke/README.md) exercise static lead detection,
+legitimate controls, repair acceptance, and failed or skipped verification.
+They test the harness; they are not a live-browser or comparative benchmark.
+
+Passing these checks verifies the tested tooling and contracts. It does not prove
+that a live app audit occurred, that every defect was found, or that Scruffy
+outperforms another reviewer.
 
 ## Maintaining and contributing
 
 Read [`AGENTS.md`](AGENTS.md) before changing anything; it maps every canonical source to its generated projection and defines what counts as done. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers adding a rule pack of your own (local, uncommitted, no review) versus adding a principle to the shared corpus (source registered, ledger row added, regression plus false-positive guard, forward test on a target the rule was not written against). Transcripts used for research are gitignored and never redistributed.
+
+## Quality and implementation
+
+The current toolkit includes static lead detection, audit scaffolding, evidence
+and decision validation, report rendering, approved-repair handoffs, executable
+acceptance checks, and repeat-audit outcomes. Browser operation and specialist
+analysis depend on the host's available tools. Scruffy does not currently ship
+an automatic Playwright, axe, Lighthouse, or security-scanner integration.
+
+Improvements follow a small implementation-and-review loop:
+
+1. **Define the outcome.** Name the failure, canonical owner, allowed changes,
+   acceptance checks, and a legitimate case that must keep working.
+2. **Implement a bounded change.** Preserve compatibility and keep unrelated work
+   separate. Change canonical sources and regenerate their projections.
+3. **Review independently.** Inspect the diff, reproduce the original failure,
+   challenge the proposed fix, and verify behavior through real code paths.
+   A repair commit or changed assertion is not proof of a repaired product.
+4. **Verify and document.** Run the required checks and, for meaningful behavior
+   changes, a fresh neutral forward test. Record incomplete checks and update
+   these instructions to match demonstrated behavior.
+
+The implementer and reviewer may use different agents. Neither role can grant
+itself additional authority or treat its own completion message as verification.
+The maintainer contract in [`AGENTS.md`](AGENTS.md) defines the required gates.
+
+Planned improvements are automatic evidence collection, optional specialist-tool
+adapters, a lighter path for constrained repairs, and comparative evaluation of
+accuracy, false positives, regressions, and cost. These are development goals,
+not installed capabilities or evidence of competitive superiority. Evaluations
+must distinguish workflow checks from actual discovery and repair outcomes; a
+healthy control may correctly produce no findings.
 
 ## Boundaries
 

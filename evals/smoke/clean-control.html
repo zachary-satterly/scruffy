@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smoke clean-control fixture</title>
+</head>
+<body>
+  <h1>Reports</h1>
+
+  <!-- Content image carries a real alt; decorative rule carries empty alt.
+       Both reserve layout space with width/height. -->
+  <img src="chart.png" alt="Weekly revenue trend, up 4 percent" width="480" height="240">
+  <img src="divider.png" alt="" width="480" height="8">
+
+  <!-- Input has an accessible name through for/id association. -->
+  <label for="q">Search reports</label>
+  <input id="q" type="text">
+
+  <!-- Icon button is named by aria-label, so it is not an empty control. -->
+  <button class="icon" aria-label="Refresh">&#8635;</button>
+
+  <!-- Same two-view affordance as the defect page, but the script gives each
+       view an address, so the state-without-address guard clears it. -->
+  <nav>
+    <button data-view="list">List</button>
+    <button data-view="grid">Grid</button>
+  </nav>
+  <section id="list">List view</section>
+  <section id="grid" hidden>Grid view</section>
+
+  <script>
+    const views = document.querySelectorAll('[data-view]');
+    views.forEach(function (control) {
+      control.addEventListener('click', function () {
+        const target = control.getAttribute('data-view');
+        location.hash = target;
+        document.getElementById('list').hidden = target !== 'list';
+        document.getElementById('grid').hidden = target !== 'grid';
+      });
+    });
+  </script>
+</body>
+</html>

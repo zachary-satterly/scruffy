@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smoke defect fixture</title>
+</head>
+<body>
+  <h1>Reports</h1>
+
+  <!-- A11Y-IMG-NO-ALT: content image with no alt attribute. -->
+  <img src="chart.png">
+
+  <!-- OP-UNLABELED-INPUT: placeholder is not an accessible name. -->
+  <input type="text" placeholder="Search reports">
+
+  <!-- A11Y-EMPTY-CONTROL: button with no accessible text. -->
+  <button class="icon"></button>
+
+  <!-- OP-NO-STATE-URL: two named views, no script touches the URL. -->
+  <nav>
+    <button data-view="list">List</button>
+    <button data-view="grid">Grid</button>
+  </nav>
+  <section id="list">List view</section>
+  <section id="grid" hidden>Grid view</section>
+
+  <script>
+    // Swaps visible view but never records it in the address bar.
+    const views = document.querySelectorAll('[data-view]');
+    views.forEach(function (control) {
+      control.addEventListener('click', function () {
+        const target = control.getAttribute('data-view');
+        document.getElementById('list').hidden = target !== 'list';
+        document.getElementById('grid').hidden = target !== 'grid';
+      });
+    });
+  </script>
+</body>
+</html>
